@@ -1,0 +1,1037 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Enhanced Particle Life with Gravity Wells</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            overscroll-behavior: none;
+        }
+        canvas {
+            display: block;
+            background-color: #111827;
+            border: 1px solid #374151;
+            border-radius: 0.5rem;
+            touch-action: none;
+        }
+        .control-panel {
+            background-color: #1f2937;
+            color: #d1d5db;
+            border-radius: 0.5rem;
+        }
+        .control-panel label, .control-panel h3, .control-panel h4, .control-panel select {
+            color: #9ca3af;
+        }
+        .control-panel select {
+            background-color: #374151;
+            border-radius: 0.25rem;
+            padding: 0.25rem 0.5rem;
+            border-color: #4b5563;
+        }
+        .control-panel input[type="range"] {
+            -webkit-appearance: none;
+            appearance: none;
+            width: 100%;
+            height: 8px;
+            background: #4b5563;
+            outline: none;
+            opacity: 0.7;
+            transition: opacity .15s ease-in-out;
+            border-radius: 4px;
+        }
+        .control-panel input[type="range"]::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            appearance: none;
+            width: 18px;
+            height: 18px;
+            background: #60a5fa;
+            cursor: pointer;
+            border-radius: 50%;
+            border: 2px solid #1f2937;
+        }
+        .control-panel input[type="range"]::-moz-range-thumb {
+            width: 18px;
+            height: 18px;
+            background: #60a5fa;
+            cursor: pointer;
+            border-radius: 50%;
+            border: 2px solid #1f2937;
+        }
+        .control-panel button {
+            background-color: #3b82f6;
+            color: white;
+            transition: background-color 0.3s;
+        }
+        .control-panel button:hover {
+            background-color: #2563eb;
+        }
+        .control-panel button.secondary {
+            background-color: #4b5563;
+        }
+        .control-panel button.secondary:hover {
+            background-color: #6b7280;
+        }
+        .rule-grid table {
+            border-collapse: collapse;
+            width: 100%;
+        }
+        .rule-grid th, .rule-grid td {
+            border: 1px solid #4b5563;
+            padding: 4px;
+            text-align: center;
+            min-width: 30px;
+            height: 30px;
+            cursor: pointer;
+            font-size: 0.8rem;
+        }
+        .rule-grid th {
+            background-color: #374151;
+        }
+        .color-picker-button {
+            width: 24px;
+            height: 24px;
+            border: 2px solid transparent;
+            margin: 2px;
+        }
+        .color-picker-button.selected {
+            border-color: #60a5fa;
+            box-shadow: 0 0 0 2px #60a5fa;
+        }
+        #toast-message {
+            position: fixed;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            background-color: #1f2937;
+            color: white;
+            padding: 10px 20px;
+            border-radius: 0.5rem;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.5);
+            z-index: 1000;
+            opacity: 0;
+            transition: opacity 0.5s ease-in-out, visibility 0.5s ease-in-out;
+            visibility: hidden;
+        }
+        #toast-message.show {
+            opacity: 1;
+            visibility: visible;
+        }
+        .conditional-control {
+            transition: max-height 0.3s ease-out, opacity 0.3s ease-out, margin 0.3s ease-out, padding 0.3s ease-out;
+            overflow: hidden; 
+        }
+        .conditional-control.hidden {
+             max-height: 0 !important; 
+             opacity: 0 !important;
+             margin-top: 0 !important;
+             margin-bottom: 0 !important;
+             padding-top: 0 !important;
+             padding-bottom: 0 !important;
+             /* Add visibility to ensure it doesn't take up click space */
+             visibility: hidden;
+        }
+    </style>
+</head>
+<body class="bg-gray-900 text-gray-200 flex flex-col lg:flex-row p-4 gap-4 h-screen overflow-hidden">
+
+    <div class="flex-grow flex flex-col">
+        <canvas id="particleCanvas" class="flex-grow"></canvas>
+        <div id="infoDisplay" class="text-sm mt-2 p-2 bg-gray-800 rounded-md text-center lg:text-left">
+            Particles: <span id="particleCount">0</span> | FPS: <span id="fpsDisplay">0</span>
+        </div>
+    </div>
+
+    <div class="control-panel w-full lg:w-96 p-4 space-y-4 overflow-y-auto max-h-full">
+        <h3 class="text-xl font-semibold border-b border-gray-700 pb-2">Controls</h3>
+
+        <div>
+            <label for="numParticles" class="block text-sm font-medium">Number of Particles: <span id="numParticlesValue">200</span></label>
+            <input type="range" id="numParticles" min="10" max="1000" value="200" class="w-full">
+        </div>
+        <div>
+            <label for="numColors" class="block text-sm font-medium">Number of Colors: <span id="numColorsValue">4</span></label>
+            <input type="range" id="numColors" min="2" max="8" value="4" class="w-full">
+        </div>
+         <div>
+            <label for="particleRadius" class="block text-sm font-medium">Particle Radius: <span id="particleRadiusValue">2</span></label>
+            <input type="range" id="particleRadius" min="1" max="10" value="2" step="0.5" class="w-full">
+        </div>
+
+        <h4 class="text-lg font-medium pt-2">Interaction Rules</h4>
+        <div id="ruleEditor" class="rule-grid"></div>
+        <button id="randomizeRulesBtn" class="w-full py-2 px-4 rounded-md text-sm secondary">Randomize Rules</button>
+
+        <h4 class="text-lg font-medium pt-2">Physics Parameters</h4>
+        <div>
+            <label for="forceModel" class="block text-sm font-medium mb-1">Force Model:</label>
+            <select id="forceModel" class="w-full bg-gray-700 border border-gray-600 rounded p-1 text-sm">
+                <option value="inverseR">Inverse R (1/r)</option>
+                <option value="lennardJones">Lennard-Jones Style</option>
+                <option value="constant">Constant Force</option>
+            </select>
+        </div>
+        <div id="ljParamsContainer" class="conditional-control space-y-2 hidden"> <div>
+                <label for="ljEquilibriumDistance" class="block text-sm font-medium">LJ Equilibrium Distance (r₀): <span id="ljEquilibriumDistanceValue">40</span></label>
+                <input type="range" id="ljEquilibriumDistance" min="5" max="100" value="40" step="1" class="w-full">
+            </div>
+        </div>
+        <div>
+            <label for="forceFactor" class="block text-sm font-medium">Force Factor: <span id="forceFactorValue">5000</span></label>
+            <input type="range" id="forceFactor" min="100" max="20000" value="5000" step="100" class="w-full">
+        </div>
+        <div>
+            <label for="maxDist" class="block text-sm font-medium">Max Interaction Distance: <span id="maxDistValue">80</span></label>
+            <input type="range" id="maxDist" min="10" max="200" value="80" class="w-full">
+        </div>
+        <div>
+            <label for="viscosity" class="block text-sm font-medium">Viscosity (Damping): <span id="viscosityValue">0.02</span></label>
+            <input type="range" id="viscosity" min="0.005" max="0.5" value="0.02" step="0.005" class="w-full">
+        </div>
+        <div>
+            <label for="simulationSpeed" class="block text-sm font-medium">Simulation Speed: <span id="simulationSpeedValue">1</span></label>
+            <input type="range" id="simulationSpeed" min="0.1" max="5" value="1" step="0.1" class="w-full">
+        </div>
+        <div>
+            <label for="maxForce" class="block text-sm font-medium">Max Acceleration: <span id="maxForceValue">1000</span></label>
+            <input type="range"id="maxForce" min="10" max="5000" value="1000" step="10" class="w-full">
+        </div>
+        <div>
+            <label for="boundaryCondition" class="block text-sm font-medium mb-1">Boundary Condition:</label>
+            <select id="boundaryCondition" class="w-full bg-gray-700 border border-gray-600 rounded p-1 text-sm">
+                <option value="bounce">Bounce</option>
+                <option value="wrap">Wrap (Toroidal)</option>
+                <option value="absorb">Absorb</option>
+            </select>
+        </div>
+        <!-- End of Part 1 for HTML Structure -->
+                 <!-- Continued from Part 1 -->
+        <h4 class="text-lg font-medium pt-2">Particle Lifecycle</h4>
+        <div>
+            <input type="checkbox" id="enableAgeDeath" class="mr-2 rounded">
+            <label for="enableAgeDeath" class="text-sm font-medium">Enable Death by Age</label>
+        </div>
+        <div id="ageParamsContainer" class="conditional-control space-y-2 hidden"> <div>
+                <label for="maxParticleAge" class="block text-sm font-medium">Max Particle Age (frames): <span id="maxParticleAgeValue">1000</span></label>
+                <input type="range" id="maxParticleAge" min="100" max="5000" value="1000" step="100" class="w-full">
+            </div>
+        </div>
+        <div>
+            <input type="checkbox" id="enableSplitting" class="mr-2 rounded">
+            <label for="enableSplitting" class="text-sm font-medium">Enable Particle Splitting</label>
+        </div>
+        <div id="splittingParamsContainer" class="conditional-control space-y-2 hidden">
+            <div>
+                <label for="reproductionAgeFactor" class="block text-sm font-medium">Reproduction Age Factor (of Max Age): <span id="reproductionAgeFactorValue">0.8</span></label>
+                <input type="range" id="reproductionAgeFactor" min="0.1" max="1" value="0.8" step="0.05" class="w-full">
+            </div>
+            <div>
+                <label for="reproductionChance" class="block text-sm font-medium">Reproduction Chance: <span id="reproductionChanceValue">0.5</span></label>
+                <input type="range" id="reproductionChance" min="0" max="1" value="0.5" step="0.01" class="w-full">
+            </div>
+            <div>
+                <label for="offspringCount" class="block text-sm font-medium">Offspring Count (1 or 2): <span id="offspringCountValue">1</span></label>
+                <input type="range" id="offspringCount" min="1" max="2" value="1" step="1" class="w-full">
+            </div>
+            <div>
+                <label for="offspringVelocityBoost" class="block text-sm font-medium">Offspring Velocity Boost: <span id="offspringVelocityBoostValue">1.1</span></label>
+                <input type="range" id="offspringVelocityBoost" min="0.5" max="2" value="1.1" step="0.05" class="w-full">
+            </div>
+            <div>
+                <input type="checkbox" id="enableColorMutation" class="mr-2 rounded">
+                <label for="enableColorMutation" class="text-sm font-medium">Enable Color Mutation on Split</label>
+            </div>
+            <div id="mutationParamsContainer" class="conditional-control space-y-2 hidden">
+                <div>
+                    <label for="mutationChance" class="block text-sm font-medium">Mutation Chance: <span id="mutationChanceValue">0.1</span></label>
+                    <input type="range" id="mutationChance" min="0" max="1" value="0.1" step="0.01" class="w-full">
+                </div>
+            </div>
+        </div>
+
+        <h4 class="text-lg font-medium pt-2">Gravity Wells</h4>
+        <div>
+            <input type="checkbox" id="enableGravityWells" class="mr-2 rounded">
+            <label for="enableGravityWells" class="text-sm font-medium">Enable Gravity Wells</label>
+        </div>
+        <div id="gravityWellParamsContainer" class="conditional-control space-y-2 hidden">
+            <div>
+                <label for="numGravityWells" class="block text-sm font-medium">Number of Wells: <span id="numGravityWellsValue">1</span></label>
+                <input type="range" id="numGravityWells" min="0" max="5" value="1" step="1" class="w-full">
+            </div>
+            <div>
+                <label for="gravityWellMass" class="block text-sm font-medium">Well Mass: <span id="gravityWellMassValue">100000</span></label>
+                <input type="range" id="gravityWellMass" min="10000" max="500000" value="100000" step="10000" class="w-full">
+            </div>
+            <div>
+                <label for="gravityConstant" class="block text-sm font-medium">Gravity Constant (G): <span id="gravityConstantValue">0.5</span></label>
+                <input type="range" id="gravityConstant" min="0.01" max="5" value="0.5" step="0.01" class="w-full">
+            </div>
+            <div>
+                <label for="gravityWellRadius" class="block text-sm font-medium">Well Visual Radius: <span id="gravityWellRadiusValue">10</span></label>
+                <input type="range" id="gravityWellRadius" min="3" max="20" value="10" step="1" class="w-full">
+            </div>
+            <button id="addGravityWellOnClickBtn" class="w-full mt-1 py-2 px-4 rounded-md text-sm secondary">Add Well at Next Click</button>
+        </div>
+
+
+        <h4 class="text-lg font-medium pt-2">Visuals</h4>
+        <div>
+            <input type="checkbox" id="showTrails" checked class="mr-2 rounded">
+            <label for="showTrails" class="text-sm font-medium">Show Particle Trails</label>
+        </div>
+        <div>
+            <label for="trailOpacity" class="block text-sm font-medium">Trail Opacity: <span id="trailOpacityValue">0.1</span></label>
+            <input type="range" id="trailOpacity" min="0.01" max="0.5" value="0.1" step="0.01" class="w-full">
+        </div>
+        <div>
+            <input type="checkbox" id="particleGlow" checked class="mr-2 rounded">
+            <label for="particleGlow" class="text-sm font-medium">Particle Glow</label>
+        </div>
+
+        <h4 class="text-lg font-medium pt-2">Simulation Control</h4>
+        <div class="grid grid-cols-2 gap-2">
+            <button id="pauseResumeBtn" class="py-2 px-4 rounded-md text-sm">Pause</button>
+            <button id="stepBtn" class="py-2 px-4 rounded-md text-sm secondary">Step</button>
+        </div>
+        <button id="resetBtn" class="w-full py-2 px-4 rounded-md text-sm bg-red-600 hover:bg-red-700">Reset Simulation</button>
+
+        <h4 class="text-lg font-medium pt-2">Add Particles</h4>
+        <div class="flex items-center space-x-2">
+            <label class="text-sm font-medium">Color:</label>
+            <div id="colorPicker" class="flex flex-wrap"></div>
+        </div>
+        <div class="flex items-center space-x-2 mt-1">
+            <input type="checkbox" id="brushMode" class="mr-2 rounded">
+            <label for="brushMode" class="text-sm font-medium">Brush Mode (Drag to add)</label>
+        </div>
+         <button id="clearParticlesBtn" class="w-full mt-2 py-2 px-4 rounded-md text-sm secondary">Clear All Particles</button>
+    </div>
+
+    <div id="toast-message"></div>
+
+    <script>
+        const canvas = document.getElementById('particleCanvas');
+        const ctx = canvas.getContext('2d');
+
+        // --- Global State & Parameters ---
+        let particles = [];
+        let rules = [];
+        let COLORS = [];
+        
+        let numParticles = 200;
+        let particleRadius = 2;
+        let numColors = 4;
+        let forceFactor = 5000; 
+        let maxDist = 80;
+        let viscosity = 0.02;   
+        let simulationSpeed = 1;
+        let maxForce = 1000;    
+        
+        let forceModel = 'inverseR'; 
+        let ljEquilibriumDistance = 40; 
+
+        let boundaryCondition = 'bounce'; 
+
+        let enableAgeDeath = false;
+        let maxParticleAge = 1000; 
+
+        let enableSplitting = false;
+        let reproductionAgeFactor = 0.8; 
+        let reproductionChance = 0.5;  
+        let offspringCount = 1;         
+        let offspringVelocityBoost = 1.1; 
+        let enableColorMutation = false;
+        let mutationChance = 0.1;
+
+        // Gravity Well Parameters
+        let heavyObjects = [];
+        let enableGravityWells = false;
+        let numGravityWells = 1; // Default, will be set by slider
+        let gravityWellMass = 100000;
+        let gravityConstant = 0.5;
+        let gravityWellRadius = 10;
+        let addWellOnClickMode = false;
+
+
+        let showTrails = true;
+        let trailOpacity = 0.1;
+        let particleGlow = true;
+
+        let isPaused = false;
+        let stepMode = false;
+
+        let selectedColorForAdding = 0;
+        let brushModeActive = false;
+        let isMouseDown = false;
+
+        let lastFrameTime = performance.now();
+        let frameCount = 0;
+        let lastFpsUpdateTime = performance.now(); // FPS Counter fix
+        const fpsDisplay = document.getElementById('fpsDisplay');
+        const particleCountDisplay = document.getElementById('particleCount');
+        
+        let controlConfigurations = [];
+        let animationFrameId = null; 
+        const MAX_TOTAL_PARTICLES = 2000;
+
+
+        // --- Spatial Grid ---
+        class SpatialGrid {
+            constructor(width, height, cellSize) {
+                this.width = width;
+                this.height = height;
+                this.cellSize = cellSize > 0 ? cellSize : 1;
+                this.cols = Math.ceil(width / this.cellSize);
+                this.rows = Math.ceil(height / this.cellSize);
+                this.grid = new Array(this.cols * this.rows).fill(null).map(() => []);
+            }
+            clear() { this.grid.forEach(cell => cell.length = 0); }
+            getCellIndex(x, y) {
+                const col = Math.max(0, Math.min(this.cols - 1, Math.floor(x / this.cellSize)));
+                const row = Math.max(0, Math.min(this.rows - 1, Math.floor(y / this.cellSize)));
+                return row * this.cols + col;
+            }
+            addParticle(particle) {
+                if (!particle || !particle.isAlive) return;
+                const index = this.getCellIndex(particle.x, particle.y);
+                if (this.grid[index]) this.grid[index].push(particle);
+            }
+            getNearbyParticles(particle) {
+                const nearby = [];
+                if (!particle || !particle.isAlive) return nearby; // Skip dead particles for proximity checks
+                const pCol = Math.floor(particle.x / this.cellSize);
+                const pRow = Math.floor(particle.y / this.cellSize);
+                for (let dRow = -1; dRow <= 1; dRow++) {
+                    for (let dCol = -1; dCol <= 1; dCol++) {
+                        const r = pRow + dRow, c = pCol + dCol;
+                        if (r >= 0 && r < this.rows && c >= 0 && c < this.cols) {
+                            const index = r * this.cols + c;
+                            if (this.grid[index]) nearby.push(...this.grid[index]);
+                        }
+                    }
+                }
+                return nearby;
+            }
+        }
+        let spatialGrid;
+
+        // --- Heavy Object Class (for Gravity Wells) ---
+        class HeavyObject {
+            constructor(x, y, mass, radius) {
+                this.x = x;
+                this.y = y;
+                this.mass = mass;
+                this.radius = radius; // Visual radius
+                this.color = '#E5E7EB'; // Light gray, distinct color
+            }
+
+            draw() {
+                ctx.beginPath();
+                ctx.arc(this.x, this.y, this.radius, 0, Math.PI * 2);
+                ctx.fillStyle = this.color;
+                ctx.fill();
+            }
+        }
+
+
+        // --- Particle Class ---
+        class Particle {
+            constructor(x, y, color) {
+                this.x = x;
+                this.y = y;
+                this.vx = (Math.random() - 0.5) * 40; 
+                this.vy = (Math.random() - 0.5) * 40;
+                this.color = color;
+                this.radius = particleRadius + (Math.random() - 0.5) * (particleRadius * 0.25) ;
+                this.age = 0;
+                this.isAlive = true;
+            }
+
+            draw() {
+                if (!this.isAlive) return;
+                ctx.beginPath();
+                ctx.arc(this.x, this.y, this.radius, 0, Math.PI * 2);
+                ctx.fillStyle = COLORS[this.color % COLORS.length]; 
+
+                if (particleGlow) {
+                    ctx.shadowColor = COLORS[this.color % COLORS.length];
+                    ctx.shadowBlur = 8;
+                } else {
+                    ctx.shadowColor = 'transparent';
+                    ctx.shadowBlur = 0;
+                }
+                ctx.fill();
+            }
+            
+            split() {
+                let newOffspring = [];
+                const actualOffspringCount = Math.max(1, offspringCount);
+
+                for (let i = 0; i < actualOffspringCount; i++) {
+                    const offspringX = this.x + (Math.random() - 0.5) * this.radius * 4;
+                    const offspringY = this.y + (Math.random() - 0.5) * this.radius * 4;
+                    
+                    let offspringColor = this.color;
+                    if (enableColorMutation && Math.random() < mutationChance) {
+                        if (numColors > 1) {
+                            let newColor = this.color;
+                            while (newColor === this.color) {
+                                newColor = Math.floor(Math.random() * numColors);
+                            }
+                            offspringColor = newColor;
+                        }
+                    }
+
+                    const offspring = new Particle(offspringX, offspringY, offspringColor);
+                    offspring.vx = this.vx * offspringVelocityBoost * (Math.random() * 0.4 + 0.8); 
+                    offspring.vy = this.vy * offspringVelocityBoost * (Math.random() * 0.4 + 0.8);
+                    offspring.radius = this.radius * (Math.random() * 0.2 + 0.8); 
+                    if (offspring.radius < 1) offspring.radius = 1;
+
+                    newOffspring.push(offspring);
+                }
+                this.isAlive = false; 
+                return newOffspring;
+            }
+
+
+            update(dt) { 
+                if (!this.isAlive) return null;
+
+                this.age++;
+                let newParticlesFromSplit = [];
+
+                // Splitting Logic
+                if (enableSplitting && this.age >= maxParticleAge * reproductionAgeFactor && this.age < maxParticleAge) {
+                    if (Math.random() < reproductionChance) {
+                        newParticlesFromSplit = this.split(); 
+                        return newParticlesFromSplit; 
+                    }
+                }
+
+                // Age Death Logic (only if not split successfully this frame)
+                if (enableAgeDeath && this.age > maxParticleAge) {
+                    this.isAlive = false;
+                    return null; 
+                }
+
+                this.vx *= (1 - viscosity);
+                this.vy *= (1 - viscosity);
+                this.x += this.vx * dt * simulationSpeed;
+                this.y += this.vy * dt * simulationSpeed;
+
+                const bounceFactor = -0.7; 
+                switch (boundaryCondition) {
+                    case 'bounce':
+                        if (this.x < this.radius) { this.x = this.radius; this.vx *= bounceFactor; }
+                        if (this.x > canvas.width - this.radius) { this.x = canvas.width - this.radius; this.vx *= bounceFactor; }
+                        if (this.y < this.radius) { this.y = this.radius; this.vy *= bounceFactor; }
+                        if (this.y > canvas.height - this.radius) { this.y = canvas.height - this.radius; this.vy *= bounceFactor; }
+                        break;
+                    case 'wrap':
+                        if (this.x < 0) this.x = canvas.width + this.x; 
+                        else if (this.x >= canvas.width) this.x = this.x % canvas.width; 
+                        if (this.y < 0) this.y = canvas.height + this.y; 
+                        else if (this.y >= canvas.height) this.y = this.y % canvas.height; 
+                        break;
+                    case 'absorb':
+                        if (this.x < -this.radius || this.x > canvas.width + this.radius || 
+                            this.y < -this.radius || this.y > canvas.height + this.radius) {
+                            this.isAlive = false;
+                        }
+                        break;
+                }
+                return null;
+            }
+
+            interact(otherParticle, ruleValue, dt) { 
+                if (!this.isAlive || !otherParticle.isAlive) return;
+
+                const dx = otherParticle.x - this.x;
+                const dy = otherParticle.y - this.y;
+                const distSq = dx * dx + dy * dy;
+                
+                const r1 = this.radius > 0 ? this.radius : 1;
+                const r2 = otherParticle.radius > 0 ? otherParticle.radius : 1;
+                const effectiveMaxDist = maxDist + r1 + r2;
+
+                if (distSq > 0.0001 && distSq < effectiveMaxDist * effectiveMaxDist) { 
+                    const dist = Math.sqrt(distSq);
+                    let accelerationStrength;
+
+                    switch (forceModel) {
+                        case 'lennardJones':
+                            const r0 = ljEquilibriumDistance > 0 ? ljEquilibriumDistance : 1;
+                            if (dist < 0.1 * r0) { // Prevent extreme forces / division by zero if dist is too small. Adjust 0.1 as needed.
+                                accelerationStrength = ruleValue * forceFactor * (Math.pow(r0 / (0.1*r0), 13));
+                                if (ruleValue < 0 ) accelerationStrength *= -1; // ensure repulsion
+                            } else {
+                                const term_repulsive = Math.pow(r0 / dist, 13);
+                                const term_attractive = Math.pow(r0 / dist, 7);
+                                accelerationStrength = ruleValue * forceFactor * (term_repulsive - term_attractive);
+                            }
+                            break;
+                        case 'constant':
+                            accelerationStrength = ruleValue * forceFactor;
+                            break;
+                        case 'inverseR': 
+                        default:
+                            accelerationStrength = ruleValue * forceFactor;
+                            if (dist > 1) { 
+                                 accelerationStrength /= dist; 
+                            }
+                            break;
+                    }
+                    
+                    let ax = (accelerationStrength * dx / dist); 
+                    let ay = (accelerationStrength * dy / dist); 
+
+                    const totalAccelerationMag = Math.sqrt(ax * ax + ay * ay);
+                    if (totalAccelerationMag > maxForce) {
+                        const scale = maxForce / totalAccelerationMag;
+                        ax *= scale;
+                        ay *= scale;
+                    }
+                    this.vx += ax * dt * simulationSpeed; 
+                    this.vy += ay * dt * simulationSpeed;
+                }
+            }
+        }
+
+        // --- Animation Loop Management ---
+        function startAnimationLoop() {
+            if (animationFrameId === null) { 
+                lastFrameTime = performance.now(); 
+                animationFrameId = requestAnimationFrame(animationLoop);
+            }
+        }
+        function stopAnimationLoop() {
+            if (animationFrameId !== null) {
+                cancelAnimationFrame(animationFrameId);
+                animationFrameId = null;
+            }
+        }
+
+        // --- Initialization Functions ---
+        function generateColors(count) {
+            COLORS = [];
+            for (let i = 0; i < count; i++) {
+                const hue = (i * 360 / count) % 360;
+                COLORS.push(`hsl(${hue}, 100%, 70%)`);
+            }
+            updateColorPicker();
+        }
+        function initializeRules() {
+            rules = [];
+            for (let i = 0; i < numColors; i++) {
+                rules[i] = [];
+                for (let j = 0; j < numColors; j++) {
+                    rules[i][j] = (Math.random() * 2 - 1) * 0.2;
+                }
+            }
+            buildRuleEditor();
+        }
+        function createParticles() {
+            particles = [];
+            const w = canvas.width || 300; 
+            const h = canvas.height || 150;
+            for (let i = 0; i < numParticles; i++) {
+                const x = Math.random() * w;
+                const y = Math.random() * h;
+                const color = Math.floor(Math.random() * numColors);
+                particles.push(new Particle(x, y, color));
+            }
+            if(particleCountDisplay) particleCountDisplay.textContent = particles.length;
+        }
+        function createGravityWells() {
+            heavyObjects = [];
+            if (!enableGravityWells || numGravityWells <= 0) return;
+
+            for (let i = 0; i < numGravityWells; i++) {
+                const x = Math.random() * canvas.width;
+                const y = Math.random() * canvas.height;
+                heavyObjects.push(new HeavyObject(x, y, gravityWellMass, gravityWellRadius));
+            }
+        }
+        
+        function updateConditionalControls() {
+            const getEl = id => document.getElementById(id);
+            const setHidden = (el, hide) => el ? (hide ? el.classList.add('hidden') : el.classList.remove('hidden')) : null;
+
+            setHidden(getEl('ljParamsContainer'), forceModel !== 'lennardJones');
+            setHidden(getEl('ageParamsContainer'), !enableAgeDeath);
+            setHidden(getEl('splittingParamsContainer'), !enableSplitting);
+            setHidden(getEl('mutationParamsContainer'), !(enableSplitting && enableColorMutation));
+            setHidden(getEl('gravityWellParamsContainer'), !enableGravityWells);
+        }
+
+
+        function resetSimulation() {
+            isPaused = false; 
+            const pauseButton = document.getElementById('pauseResumeBtn');
+            if(pauseButton) pauseButton.textContent = 'Pause';
+            
+            controlConfigurations.forEach(config => {
+                 const inputElement = document.getElementById(config.id);
+                 if (inputElement) {
+                     let val;
+                     if (inputElement.type === 'checkbox') val = inputElement.checked;
+                     else if (config.isInt) val = parseInt(inputElement.value);
+                     else if (inputElement.type === 'range' || inputElement.type === 'number') val = parseFloat(inputElement.value);
+                     else if (inputElement.tagName === 'SELECT') val = inputElement.value;
+                     else val = inputElement.value;
+                     config.valueRef(val); 
+                 }
+            });
+            updateConditionalControls(); 
+
+            generateColors(numColors);
+            initializeRules();
+            createParticles(); 
+            createGravityWells(); // Create wells based on new numGravityWells
+
+            const currentMaxDist = maxDist > 0 ? maxDist : 80; 
+            if (canvas.width > 0 && canvas.height > 0) {
+                 spatialGrid = new SpatialGrid(canvas.width, canvas.height, currentMaxDist);
+            } else {
+                spatialGrid = new SpatialGrid(300, 150, currentMaxDist); 
+            }
+            if (spatialGrid) { 
+                 spatialGrid.clear();
+                 particles.forEach(p => { if(p.isAlive) spatialGrid.addParticle(p); });
+            }
+            
+            showToast("Simulation Reset & Running!");
+            stopAnimationLoop(); startAnimationLoop(); 
+        }
+
+        // --- UI Interaction ---
+        function buildRuleEditor() {
+            const editorDiv = document.getElementById('ruleEditor');
+            if (!editorDiv) return;
+            editorDiv.innerHTML = '';
+            const table = document.createElement('table');
+            const tbody = document.createElement('tbody');
+            const headerRow = document.createElement('tr');
+            const thEmpty = document.createElement('th');
+            headerRow.appendChild(thEmpty);
+            for (let j = 0; j < numColors; j++) {
+                const th = document.createElement('th');
+                th.style.backgroundColor = COLORS[j % COLORS.length];
+                th.style.width = '20px'; th.style.height = '20px';
+                headerRow.appendChild(th);
+            }
+            tbody.appendChild(headerRow);
+            for (let i = 0; i < numColors; i++) {
+                const row = document.createElement('tr');
+                const thRow = document.createElement('th');
+                thRow.style.backgroundColor = COLORS[i % COLORS.length];
+                thRow.style.width = '20px'; thRow.style.height = '20px';
+                row.appendChild(thRow);
+                for (let j = 0; j < numColors; j++) {
+                    const cell = document.createElement('td');
+                    const ruleValue = (rules[i] && typeof rules[i][j] !== 'undefined') ? rules[i][j] : 0;
+                    cell.textContent = ruleValue.toFixed(2);
+                    cell.dataset.row = i; cell.dataset.col = j;
+                    if (ruleValue > 0) cell.style.color = '#6ee7b7';
+                    else if (ruleValue < 0) cell.style.color = '#f87171';
+                    else cell.style.color = '#9ca3af';
+                    cell.addEventListener('click', () => {
+                        const cycleValues = [-1.0, -0.5, -0.2, 0, 0.2, 0.5, 1.0]; 
+                        let currentRuleVal = (rules[i] && typeof rules[i][j] !== 'undefined') ? rules[i][j] : 0;
+                        currentRuleVal = parseFloat(currentRuleVal.toFixed(2));
+                        let currentIndex = cycleValues.findIndex(v => Math.abs(v - currentRuleVal) < 0.001);
+                        if (currentIndex === -1) currentIndex = cycleValues.indexOf(0); 
+                        rules[i][j] = cycleValues[(currentIndex + 1) % cycleValues.length];
+                        cell.textContent = rules[i][j].toFixed(2);
+                         if (rules[i][j] > 0) cell.style.color = '#6ee7b7';
+                         else if (rules[i][j] < 0) cell.style.color = '#f87171';
+                         else cell.style.color = '#9ca3af';
+                    });
+                    row.appendChild(cell);
+                }
+                tbody.appendChild(row);
+            }
+            table.appendChild(tbody); editorDiv.appendChild(table);
+        }
+        function updateColorPicker() {
+            const pickerDiv = document.getElementById('colorPicker');
+            if (!pickerDiv) return;
+            pickerDiv.innerHTML = '';
+            COLORS.forEach((color, index) => {
+                const button = document.createElement('button');
+                button.classList.add('color-picker-button', 'rounded-full');
+                button.style.backgroundColor = color;
+                if (index === selectedColorForAdding) button.classList.add('selected');
+                button.addEventListener('click', () => {
+                    selectedColorForAdding = index; updateColorPicker();
+                });
+                pickerDiv.appendChild(button);
+            });
+        }
+        function setupEventListeners() {
+            controlConfigurations = [
+                { id: 'numParticles', isInt: true, resetOnChange: true, valueRef: (val) => numParticles = val },
+                { id: 'numColors', isInt: true, resetOnChange: true, valueRef: (val) => numColors = val },
+                { id: 'particleRadius', isInt: false, resetOnChange: false, valueRef: (val) => {
+                    particleRadius = val; if(particles) particles.forEach(p => p.radius = particleRadius + (Math.random() - 0.5) * (particleRadius * 0.25)); }},
+                { id: 'forceFactor', isInt: false, resetOnChange: false, valueRef: (val) => forceFactor = val },
+                { id: 'maxDist', isInt: false, resetOnChange: false, valueRef: (val) => {
+                    maxDist = val; const cMaxDist = maxDist > 0 ? maxDist : 80;
+                    if (spatialGrid && canvas.width > 0 && canvas.height > 0) spatialGrid = new SpatialGrid(canvas.width, canvas.height, cMaxDist); }},
+                { id: 'viscosity', isInt: false, resetOnChange: false, valueRef: (val) => viscosity = val },
+                { id: 'simulationSpeed', isInt: false, resetOnChange: false, valueRef: (val) => simulationSpeed = val },
+                { id: 'maxForce', isInt: false, resetOnChange: false, valueRef: (val) => maxForce = val },
+                { id: 'trailOpacity', isInt: false, resetOnChange: false, valueRef: (val) => trailOpacity = val },
+                { id: 'forceModel', type: 'select', resetOnChange: false, valueRef: (val) => { forceModel = val; updateConditionalControls(); } },
+                { id: 'ljEquilibriumDistance', isInt: false, resetOnChange: false, valueRef: (val) => ljEquilibriumDistance = val },
+                { id: 'boundaryCondition', type: 'select', resetOnChange: false, valueRef: (val) => boundaryCondition = val },
+                { id: 'enableAgeDeath', type: 'checkbox', resetOnChange: false, valueRef: (val) => { enableAgeDeath = val; updateConditionalControls(); } },
+                { id: 'maxParticleAge', isInt: true, resetOnChange: false, valueRef: (val) => maxParticleAge = val },
+                { id: 'enableSplitting', type: 'checkbox', resetOnChange: false, valueRef: (val) => { enableSplitting = val; updateConditionalControls(); } },
+                { id: 'reproductionAgeFactor', isInt: false, resetOnChange: false, valueRef: (val) => reproductionAgeFactor = val },
+                { id: 'reproductionChance', isInt: false, resetOnChange: false, valueRef: (val) => reproductionChance = val },
+                { id: 'offspringCount', isInt: true, resetOnChange: false, valueRef: (val) => offspringCount = val },
+                { id: 'offspringVelocityBoost', isInt: false, resetOnChange: false, valueRef: (val) => offspringVelocityBoost = val },
+                { id: 'enableColorMutation', type: 'checkbox', resetOnChange: false, valueRef: (val) => { enableColorMutation = val; updateConditionalControls(); } },
+                { id: 'mutationChance', isInt: false, resetOnChange: false, valueRef: (val) => mutationChance = val },
+                // Gravity Well Controls
+                { id: 'enableGravityWells', type: 'checkbox', resetOnChange: true, valueRef: (val) => { enableGravityWells = val; updateConditionalControls(); } }, // reset to create/clear wells
+                { id: 'numGravityWells', isInt: true, resetOnChange: true, valueRef: (val) => numGravityWells = val }, // reset to update number of wells
+                { id: 'gravityWellMass', isInt: false, resetOnChange: false, valueRef: (val) => gravityWellMass = val }, // No reset needed, applied live if wells exist
+                { id: 'gravityConstant', isInt: false, resetOnChange: false, valueRef: (val) => gravityConstant = val },
+                { id: 'gravityWellRadius', isInt: false, resetOnChange: false, valueRef: (val) => gravityWellRadius = val },
+            ];
+            controlConfigurations.forEach(config => {
+                const input = document.getElementById(config.id);
+                const valueDisplay = document.getElementById(config.id + 'Value'); 
+                if(!input) return;
+                const eventType = (input.type === 'checkbox' || input.tagName === 'SELECT') ? 'change' : 'input';
+                input.addEventListener(eventType, () => { 
+                    let val;
+                    if (input.type === 'checkbox') val = input.checked;
+                    else if (input.tagName === 'SELECT') val = input.value;
+                    else if (config.isInt) val = parseInt(input.value);
+                    else val = parseFloat(input.value);
+                    if (valueDisplay && input.type === 'range') valueDisplay.textContent = input.value;
+                    config.valueRef(val); 
+                    if (config.resetOnChange) resetSimulation();
+                });
+                if (valueDisplay && input.type === 'range') valueDisplay.textContent = input.value;
+            });
+            document.getElementById('showTrails')?.addEventListener('change', (e) => showTrails = e.target.checked);
+            document.getElementById('particleGlow')?.addEventListener('change', (e) => particleGlow = e.target.checked);
+            document.getElementById('brushMode')?.addEventListener('change', (e) => brushModeActive = e.target.checked);
+            document.getElementById('randomizeRulesBtn')?.addEventListener('click', () => { initializeRules(); showToast("Rules Randomized"); });
+            document.getElementById('pauseResumeBtn')?.addEventListener('click', () => {
+                isPaused = !isPaused; stepMode = false; 
+                const button = document.getElementById('pauseResumeBtn');
+                if (button) button.textContent = isPaused ? 'Resume' : 'Pause';
+                if (isPaused) stopAnimationLoop(); else startAnimationLoop();
+            });
+            document.getElementById('stepBtn')?.addEventListener('click', () => {
+                isPaused = true; stepMode = true;
+                const pauseButton = document.getElementById('pauseResumeBtn');
+                if (pauseButton) pauseButton.textContent = 'Resume';
+                stopAnimationLoop(); animationFrameId = requestAnimationFrame(animationLoop); 
+            });
+            document.getElementById('resetBtn')?.addEventListener('click', resetSimulation);
+            document.getElementById('clearParticlesBtn')?.addEventListener('click', () => {
+                particles = []; heavyObjects = []; if (spatialGrid) spatialGrid.clear();
+                if(particleCountDisplay) particleCountDisplay.textContent = particles.length; showToast("All particles & wells cleared");
+            });
+            document.getElementById('addGravityWellOnClickBtn')?.addEventListener('click', () => {
+                if (!enableGravityWells) {
+                    showToast("Enable Gravity Wells first!"); return;
+                }
+                addWellOnClickMode = true; showToast("Click on canvas to add a gravity well.");
+            });
+            canvas.addEventListener('click', (event) => {
+                const rect = canvas.getBoundingClientRect();
+                const x = event.clientX - rect.left; const y = event.clientY - rect.top;
+                if (addWellOnClickMode && enableGravityWells) {
+                    heavyObjects.push(new HeavyObject(x, y, gravityWellMass, gravityWellRadius));
+                    showToast(`Gravity well added at (${x.toFixed(0)}, ${y.toFixed(0)})`);
+                    addWellOnClickMode = false; return;
+                }
+                if ((isPaused && !stepMode) || brushModeActive) return;
+                if (x >= 0 && x <= canvas.width && y >= 0 && y <= canvas.height) {
+                     if (particles.length < MAX_TOTAL_PARTICLES) { 
+                        const newP = new Particle(x, y, selectedColorForAdding); particles.push(newP);
+                        if(spatialGrid && newP.isAlive) spatialGrid.addParticle(newP);
+                        if(particleCountDisplay) particleCountDisplay.textContent = particles.length;
+                    } else { showToast(`Max particle limit (${MAX_TOTAL_PARTICLES}) reached`); }
+                }
+            });
+            canvas.addEventListener('mousedown', (event) => { if (brushModeActive) { isMouseDown = true; addParticleAtMouse(event); } });
+            canvas.addEventListener('mousemove', (event) => { if (brushModeActive && isMouseDown) { addParticleAtMouse(event); } });
+            canvas.addEventListener('mouseup', () => { if (brushModeActive) { isMouseDown = false; } });
+            canvas.addEventListener('mouseleave', () => { if (brushModeActive) { isMouseDown = false; } });
+            canvas.addEventListener('touchstart', (e) => { if (brushModeActive) { isMouseDown = true; addParticleAtMouse(e.touches[0]); e.preventDefault(); } }, { passive: false });
+            canvas.addEventListener('touchmove', (e) => { if (brushModeActive && isMouseDown) { addParticleAtMouse(e.touches[0]); e.preventDefault(); } }, { passive: false });
+            canvas.addEventListener('touchend', () => { if (brushModeActive) { isMouseDown = false; } });
+        }
+        function addParticleAtMouse(event) {
+            const rect = canvas.getBoundingClientRect();
+            const x = event.clientX - rect.left; const y = event.clientY - rect.top;
+             if (x >= 0 && x <= canvas.width && y >= 0 && y <= canvas.height) {
+                if (particles.length < MAX_TOTAL_PARTICLES) {
+                    const newP = new Particle(x, y, selectedColorForAdding); particles.push(newP);
+                    if(spatialGrid && newP.isAlive) spatialGrid.addParticle(newP);
+                    if(particleCountDisplay) particleCountDisplay.textContent = particles.length;
+                } else {
+                    if (isMouseDown) { showToast(`Max particle limit (${MAX_TOTAL_PARTICLES}) reached`); isMouseDown = false; }
+                }
+            }
+        }
+        function showToast(message) {
+            const toast = document.getElementById('toast-message');
+            if (!toast) return;
+            toast.textContent = message; toast.classList.add('show');
+            setTimeout(() => { toast.classList.remove('show'); }, 3000);
+        }
+
+        // --- Main Simulation Loop ---
+        function animationLoop(timestamp) {
+            const raw_dt = Math.min(0.1, (timestamp - lastFrameTime) / 1000 || 1/60); 
+            lastFrameTime = timestamp;
+
+            frameCount++; const now = performance.now();
+            const deltaFps = now - lastFpsUpdateTime; // Use global lastFpsUpdateTime
+            if (deltaFps >= 1000) { 
+                if(fpsDisplay) fpsDisplay.textContent = (frameCount / (deltaFps / 1000)).toFixed(1);
+                lastFpsUpdateTime = now; frameCount = 0;
+            }
+            
+            let newBornParticles = [];
+            particles.forEach(p => {
+                if (p.isAlive) {
+                    const splitResult = p.update(raw_dt); 
+                    if (splitResult && splitResult.length > 0) newBornParticles.push(...splitResult);
+                }
+            });
+            
+            if (newBornParticles.length > 0) {
+                if (particles.length + newBornParticles.length <= MAX_TOTAL_PARTICLES) particles.push(...newBornParticles);
+                else if (particles.length < MAX_TOTAL_PARTICLES) particles.push(...newBornParticles.slice(0, MAX_TOTAL_PARTICLES - particles.length));
+            }
+            particles = particles.filter(p => p.isAlive);
+            if(particleCountDisplay) particleCountDisplay.textContent = particles.length;
+
+            if (showTrails) {
+                ctx.fillStyle = `rgba(17, 24, 39, ${trailOpacity})`; ctx.fillRect(0, 0, canvas.width, canvas.height);
+            } else { ctx.clearRect(0, 0, canvas.width, canvas.height); }
+
+            // Apply Gravity Well Forces
+            if (enableGravityWells && heavyObjects.length > 0) {
+                particles.forEach(p => {
+                    if (!p.isAlive) return;
+                    heavyObjects.forEach(well => {
+                        const dx = well.x - p.x; const dy = well.y - p.y;
+                        const distSq = dx * dx + dy * dy;
+                        // Only apply force if not too close (e.g., outside the well's visual radius + particle radius)
+                        // Increase (p.radius + well.radius) if particles get stuck or sling too fast
+                        if (distSq > (p.radius + well.radius + 5) * (p.radius + well.radius + 5) ) { // Add a small buffer
+                            const dist = Math.sqrt(distSq);
+                            const accelerationMag = gravityConstant * well.mass / distSq;
+                            let ax = accelerationMag * dx / dist; let ay = accelerationMag * dy / dist;
+                            p.vx += ax * raw_dt * simulationSpeed; p.vy += ay * raw_dt * simulationSpeed;
+                        } else if (distSq > 0.01 && distSq <= Math.pow(p.radius + well.radius, 2)) {
+                            // Optional: if particle enters well, maybe make it stick or get absorbed.
+                            // For now, just avoid extreme forces.
+                            // Could also reflect them or reduce velocity significantly.
+                            // p.isAlive = false; // Absorb
+                        }
+                    });
+                });
+            }
+
+
+            if (spatialGrid) {
+                spatialGrid.clear(); 
+                particles.forEach(p => { if(p.isAlive) spatialGrid.addParticle(p); }); 
+                particles.forEach(p1 => {
+                    if (!p1.isAlive) return;
+                    const nearby = spatialGrid.getNearbyParticles(p1);
+                    nearby.forEach(p2 => {
+                        if (!p2.isAlive || p1 === p2) return;
+                        const r1c = p1.color % (rules.length > 0 ? rules.length : 1);
+                        const r2c = p2.color % (rules[r1c] ? rules[r1c].length : 1);
+                        const ruleVal = (rules[r1c] && typeof rules[r1c][r2c] !== 'undefined') ? rules[r1c][r2c] : 0;
+                        p1.interact(p2, ruleVal, raw_dt);
+                    });
+                });
+            }
+            particles.forEach(p => { if (p.isAlive) p.draw(); });
+            heavyObjects.forEach(well => well.draw()); // Draw gravity wells
+            
+            ctx.shadowBlur = 0; 
+
+            if (stepMode) {
+                isPaused = true; stepMode = false;
+                const pauseBtn = document.getElementById('pauseResumeBtn');
+                if (pauseBtn) pauseBtn.textContent = 'Resume';
+                animationFrameId = null; return; 
+            }
+            if (!isPaused) animationFrameId = requestAnimationFrame(animationLoop);
+            else animationFrameId = null; 
+        }
+
+        // --- Resize Handling ---
+        function resizeCanvas() {
+            const parent = canvas.parentElement;
+            if (!parent) return;
+            canvas.width = parent.clientWidth;
+            const infoDisp = document.getElementById('infoDisplay');
+            const infoDispHeight = infoDisp ? infoDisp.offsetHeight : 0;
+            canvas.height = Math.max(150, parent.clientHeight - infoDispHeight - 10);
+
+            const cMaxDist = maxDist > 0 ? maxDist : 80;
+            if (canvas.width > 0 && canvas.height > 0) {
+                spatialGrid = new SpatialGrid(canvas.width, canvas.height, cMaxDist);
+                if (particles.length > 0 && spatialGrid) { 
+                    spatialGrid.clear();
+                    particles.forEach(p => { if(p.isAlive) spatialGrid.addParticle(p); });
+                }
+            } else { spatialGrid = new SpatialGrid(300, 150, cMaxDist); }
+            
+            if (isPaused) { 
+                if (showTrails) {
+                    ctx.fillStyle = `rgba(17, 24, 39, ${trailOpacity})`; ctx.fillRect(0, 0, canvas.width, canvas.height);
+                } else { ctx.clearRect(0, 0, canvas.width, canvas.height); }
+                particles.forEach(p => { if(p.isAlive) p.draw(); });
+                heavyObjects.forEach(well => well.draw()); // Redraw wells if paused
+                ctx.shadowBlur = 0;
+            } else { startAnimationLoop(); }
+        }
+        
+        // --- Initial Setup ---
+        window.addEventListener('load', () => {
+            resizeCanvas(); setupEventListeners(); 
+            controlConfigurations.forEach(config => {
+                const inputEl = document.getElementById(config.id);
+                if (inputEl) {
+                    let val;
+                     if (inputEl.type === 'checkbox') val = inputEl.checked;
+                     else if (inputEl.tagName === 'SELECT') val = inputEl.value;
+                     else if (config.isInt) val = parseInt(inputEl.value);
+                     else val = parseFloat(inputEl.value);
+                    config.valueRef(val); 
+                    if (inputEl.type === 'range') {
+                        const valDisp = document.getElementById(config.id + 'Value');
+                        if (valDisp) valDisp.textContent = inputEl.value;
+                    }
+                }
+            });
+            updateConditionalControls(); 
+            resetSimulation(); 
+            showToast("Particle Life: Gravity Wells & Advanced Features Ready!");
+        });
+        window.addEventListener('resize', resizeCanvas);
+    </script>
+</body>
+</html>
