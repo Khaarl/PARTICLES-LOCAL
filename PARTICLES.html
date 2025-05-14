@@ -291,6 +291,10 @@
             <input type="checkbox" id="particleGlow" checked class="mr-2 rounded">
             <label for="particleGlow" class="text-sm font-medium">Particle Glow</label>
         </div>
+        <div>
+            <label for="zoomLevel" class="block text-sm font-medium">Zoom Level: <span id="zoomLevelValue">1</span>x</label>
+            <input type="range" id="zoomLevel" min="0.1" max="5" value="1" step="0.1" class="w-full">
+        </div>
 
         <h4 class="text-lg font-medium pt-2">Simulation Control</h4>
         <div class="grid grid-cols-2 gap-2">
@@ -321,29 +325,40 @@
         let particles = [];
         let rules = [];
         let COLORS = [];
+
+        // World Dimensions (logical size of the simulation area)
+        const WORLD_WIDTH = 2000; // Example: larger than typical canvas
+        const WORLD_HEIGHT = 1200;
+
+        // Camera object to manage view
+        let camera = {
+            x: WORLD_WIDTH / 2,  // Initial camera position (world coordinates)
+            y: WORLD_HEIGHT / 2,
+            zoom: 1              // Initial zoom level
+        };
         
         let numParticles = 200;
         let particleRadius = 2;
         let numColors = 4;
-        let forceFactor = 5000; 
+        let forceFactor = 5000;
         let maxDist = 80;
-        let viscosity = 0.02;   
+        let viscosity = 0.02;
         let simulationSpeed = 1;
-        let maxForce = 1000;    
+        let maxForce = 1000;
         
-        let forceModel = 'inverseR'; 
-        let ljEquilibriumDistance = 40; 
+        let forceModel = 'inverseR';
+        let ljEquilibriumDistance = 40;
 
-        let boundaryCondition = 'bounce'; 
+        let boundaryCondition = 'bounce';
 
         let enableAgeDeath = false;
-        let maxParticleAge = 1000; 
+        let maxParticleAge = 1000;
 
         let enableSplitting = false;
-        let reproductionAgeFactor = 0.8; 
-        let reproductionChance = 0.5;  
-        let offspringCount = 1;         
-        let offspringVelocityBoost = 1.1; 
+        let reproductionAgeFactor = 0.8;
+        let reproductionChance = 0.5;
+        let offspringCount = 1;
+        let offspringVelocityBoost = 1.1;
         let enableColorMutation = false;
         let mutationChance = 0.1;
 
@@ -360,13 +375,19 @@
         let showTrails = true;
         let trailOpacity = 0.1;
         let particleGlow = true;
+        // let zoomLevel = 1; // Replaced by camera.zoom
 
         let isPaused = false;
         let stepMode = false;
 
         let selectedColorForAdding = 0;
         let brushModeActive = false;
-        let isMouseDown = false;
+        let isMouseDownForBrush = false;
+        
+        // Panning state
+        let isPanning = false;
+        let lastPanX = 0;
+        let lastPanY = 0;
 
         let lastFrameTime = performance.now();
         let frameCount = 0;
@@ -376,7 +397,7 @@
         
         let controlConfigurations = [];
         let animationFrameId = null; 
-        const MAX_TOTAL_PARTICLES = 2000;
+        const MAX_TOTAL_PARTICLES = 6000;
 
 
         // --- Spatial Grid ---
@@ -453,12 +474,14 @@
 
             draw() {
                 if (!this.isAlive) return;
+
+                const fillColor = COLORS[this.color % COLORS.length];
                 ctx.beginPath();
                 ctx.arc(this.x, this.y, this.radius, 0, Math.PI * 2);
-                ctx.fillStyle = COLORS[this.color % COLORS.length]; 
+                ctx.fillStyle = fillColor;
 
                 if (particleGlow) {
-                    ctx.shadowColor = COLORS[this.color % COLORS.length];
+                    ctx.shadowColor = fillColor;
                     ctx.shadowBlur = 8;
                 } else {
                     ctx.shadowColor = 'transparent';
@@ -524,23 +547,28 @@
                 this.x += this.vx * dt * simulationSpeed;
                 this.y += this.vy * dt * simulationSpeed;
 
-                const bounceFactor = -0.7; 
+                const bounceFactor = -0.7;
+                const worldLeft = 0;
+                const worldRight = WORLD_WIDTH;
+                const worldTop = 0;
+                const worldBottom = WORLD_HEIGHT;
+
                 switch (boundaryCondition) {
                     case 'bounce':
-                        if (this.x < this.radius) { this.x = this.radius; this.vx *= bounceFactor; }
-                        if (this.x > canvas.width - this.radius) { this.x = canvas.width - this.radius; this.vx *= bounceFactor; }
-                        if (this.y < this.radius) { this.y = this.radius; this.vy *= bounceFactor; }
-                        if (this.y > canvas.height - this.radius) { this.y = canvas.height - this.radius; this.vy *= bounceFactor; }
+                        if (this.x < this.radius + worldLeft) { this.x = this.radius + worldLeft; this.vx *= bounceFactor; }
+                        if (this.x > worldRight - this.radius) { this.x = worldRight - this.radius; this.vx *= bounceFactor; }
+                        if (this.y < this.radius + worldTop) { this.y = this.radius + worldTop; this.vy *= bounceFactor; }
+                        if (this.y > worldBottom - this.radius) { this.y = worldBottom - this.radius; this.vy *= bounceFactor; }
                         break;
                     case 'wrap':
-                        if (this.x < 0) this.x = canvas.width + this.x; 
-                        else if (this.x >= canvas.width) this.x = this.x % canvas.width; 
-                        if (this.y < 0) this.y = canvas.height + this.y; 
-                        else if (this.y >= canvas.height) this.y = this.y % canvas.height; 
+                        if (this.x < worldLeft) this.x = worldRight + (this.x - worldLeft);
+                        else if (this.x >= worldRight) this.x = worldLeft + (this.x % worldRight); // Ensure positive result for modulo
+                        if (this.y < worldTop) this.y = worldBottom + (this.y - worldTop);
+                        else if (this.y >= worldBottom) this.y = worldTop + (this.y % worldBottom); // Ensure positive result for modulo
                         break;
                     case 'absorb':
-                        if (this.x < -this.radius || this.x > canvas.width + this.radius || 
-                            this.y < -this.radius || this.y > canvas.height + this.radius) {
+                        if (this.x < worldLeft - this.radius || this.x > worldRight + this.radius ||
+                            this.y < worldTop - this.radius || this.y > worldBottom + this.radius) {
                             this.isAlive = false;
                         }
                         break;
@@ -637,11 +665,9 @@
         }
         function createParticles() {
             particles = [];
-            const w = canvas.width || 300; 
-            const h = canvas.height || 150;
             for (let i = 0; i < numParticles; i++) {
-                const x = Math.random() * w;
-                const y = Math.random() * h;
+                const x = Math.random() * WORLD_WIDTH;  // Use WORLD_WIDTH
+                const y = Math.random() * WORLD_HEIGHT; // Use WORLD_HEIGHT
                 const color = Math.floor(Math.random() * numColors);
                 particles.push(new Particle(x, y, color));
             }
@@ -652,8 +678,8 @@
             if (!enableGravityWells || numGravityWells <= 0) return;
 
             for (let i = 0; i < numGravityWells; i++) {
-                const x = Math.random() * canvas.width;
-                const y = Math.random() * canvas.height;
+                const x = Math.random() * WORLD_WIDTH;  // Use WORLD_WIDTH
+                const y = Math.random() * WORLD_HEIGHT; // Use WORLD_HEIGHT
                 heavyObjects.push(new HeavyObject(x, y, gravityWellMass, gravityWellRadius));
             }
         }
@@ -687,29 +713,67 @@
                      config.valueRef(val); 
                  }
             });
-            updateConditionalControls(); 
+            updateConditionalControls();
 
             generateColors(numColors);
             initializeRules();
-            createParticles(); 
+            createParticles();
             createGravityWells(); // Create wells based on new numGravityWells
 
-            const currentMaxDist = maxDist > 0 ? maxDist : 80; 
-            if (canvas.width > 0 && canvas.height > 0) {
-                 spatialGrid = new SpatialGrid(canvas.width, canvas.height, currentMaxDist);
-            } else {
-                spatialGrid = new SpatialGrid(300, 150, currentMaxDist); 
-            }
-            if (spatialGrid) { 
+            const currentMaxDist = maxDist > 0 ? maxDist : 80;
+            // Spatial grid should always use WORLD_WIDTH and WORLD_HEIGHT
+            spatialGrid = new SpatialGrid(WORLD_WIDTH, WORLD_HEIGHT, currentMaxDist);
+            if (spatialGrid) {
                  spatialGrid.clear();
                  particles.forEach(p => { if(p.isAlive) spatialGrid.addParticle(p); });
             }
-            
-            showToast("Simulation Reset & Running!");
-            stopAnimationLoop(); startAnimationLoop(); 
-        }
+           
+           // Reset camera to center of the world on simulation reset
+           camera.x = WORLD_WIDTH / 2;
+           camera.y = WORLD_HEIGHT / 2;
+           // camera.zoom = 1; // Optionally reset zoom, or keep current zoom. Current setup persists zoom.
+           
+           // Ensure UI reflects camera state
+           const zoomSlider = document.getElementById('zoomLevel');
+           const zoomValueDisplay = document.getElementById('zoomLevelValue');
+           if (zoomSlider) zoomSlider.value = camera.zoom;
+           if (zoomValueDisplay) zoomValueDisplay.textContent = camera.zoom.toFixed(2);
 
-        // --- UI Interaction ---
+
+           showToast("Simulation Reset & Running!");
+           stopAnimationLoop(); startAnimationLoop();
+       }
+
+       // Helper function to get mouse/touch coordinates in WORLD space
+       function getMousePos(event) {
+           const rect = canvas.getBoundingClientRect();
+           let clientX, clientY;
+
+           if (event.touches && event.touches.length > 0) {
+               clientX = event.touches[0].clientX;
+               clientY = event.touches[0].clientY;
+           } else if (event.clientX !== undefined) {
+               clientX = event.clientX;
+               clientY = event.clientY;
+           } else {
+               console.warn("Unknown event structure in getMousePos:", event);
+               // Fallback to current camera center in world space
+               return { x: camera.x, y: camera.y };
+           }
+
+           const canvasMouseX = clientX - rect.left;
+           const canvasMouseY = clientY - rect.top;
+
+           // Convert canvas coordinates to world coordinates
+           // This accounts for camera's pan (camera.x, camera.y) and zoom (camera.zoom)
+           // The canvas center (canvas.width/2, canvas.height/2) is the view's focal point
+           const worldX = camera.x + (canvasMouseX - canvas.width / 2) / camera.zoom;
+           const worldY = camera.y + (canvasMouseY - canvas.height / 2) / camera.zoom;
+           
+           return { x: worldX, y: worldY };
+       }
+
+       // --- UI Interaction ---
         function buildRuleEditor() {
             const editorDiv = document.getElementById('ruleEditor');
             if (!editorDiv) return;
@@ -805,6 +869,7 @@
                 { id: 'gravityWellMass', isInt: false, resetOnChange: false, valueRef: (val) => gravityWellMass = val }, // No reset needed, applied live if wells exist
                 { id: 'gravityConstant', isInt: false, resetOnChange: false, valueRef: (val) => gravityConstant = val },
                 { id: 'gravityWellRadius', isInt: false, resetOnChange: false, valueRef: (val) => gravityWellRadius = val },
+                { id: 'zoomLevel', isInt: false, resetOnChange: false, valueRef: (val) => camera.zoom = val},
             ];
             controlConfigurations.forEach(config => {
                 const input = document.getElementById(config.id);
@@ -825,7 +890,23 @@
             });
             document.getElementById('showTrails')?.addEventListener('change', (e) => showTrails = e.target.checked);
             document.getElementById('particleGlow')?.addEventListener('change', (e) => particleGlow = e.target.checked);
-            document.getElementById('brushMode')?.addEventListener('change', (e) => brushModeActive = e.target.checked);
+            document.getElementById('zoomLevel')?.addEventListener('input', (event) => {
+                camera.zoom = parseFloat(event.target.value);
+                const display = document.getElementById('zoomLevelValue');
+                if(display) display.textContent = `${camera.zoom.toFixed(2)}`;
+                if (isPaused && animationFrameId === null) {
+                    drawScene();
+                }
+            });
+            document.getElementById('brushMode')?.addEventListener('change', (e) => {
+                brushModeActive = e.target.checked;
+                if (brushModeActive) {
+                    isPanning = false;
+                    canvas.style.cursor = 'crosshair'; // Or your preferred brush cursor
+                } else {
+                    canvas.style.cursor = 'grab'; // Default cursor when not brushing
+                }
+            });
             document.getElementById('randomizeRulesBtn')?.addEventListener('click', () => { initializeRules(); showToast("Rules Randomized"); });
             document.getElementById('pauseResumeBtn')?.addEventListener('click', () => {
                 isPaused = !isPaused; stepMode = false; 
@@ -848,43 +929,197 @@
                 if (!enableGravityWells) {
                     showToast("Enable Gravity Wells first!"); return;
                 }
-                addWellOnClickMode = true; showToast("Click on canvas to add a gravity well.");
+                addWellOnClickMode = true;
+                isPanning = false;
+                canvas.style.cursor = 'crosshair'; // Or specific cursor for adding wells
+                showToast("Click on canvas to add a gravity well.");
             });
+
+            // Canvas Mouse Listeners
+            canvas.addEventListener('mousedown', (event) => {
+                if (event.button === 0) { // Left mouse button
+                    if (brushModeActive) {
+                        isMouseDownForBrush = true;
+                        const { x, y } = getMousePos(event);
+                        addParticleAt(x, y, event.type);
+                    } else if (!addWellOnClickMode) {
+                        isPanning = true;
+                        lastPanX = event.clientX;
+                        lastPanY = event.clientY;
+                        canvas.style.cursor = 'grabbing';
+                    }
+                }
+            });
+
+            canvas.addEventListener('mousemove', (event) => {
+                if (isPanning) {
+                    const dx = event.clientX - lastPanX;
+                    const dy = event.clientY - lastPanY;
+                    lastPanX = event.clientX;
+                    lastPanY = event.clientY;
+
+                    camera.x -= dx / camera.zoom;
+                    camera.y -= dy / camera.zoom;
+
+                    if (isPaused && animationFrameId === null) drawScene();
+                    event.preventDefault();
+                } else if (brushModeActive && isMouseDownForBrush) {
+                    const { x, y } = getMousePos(event);
+                    addParticleAt(x, y, event.type);
+                }
+            });
+
+            window.addEventListener('mouseup', (event) => {
+                if (event.button === 0) {
+                    if (isPanning) {
+                        isPanning = false;
+                        canvas.style.cursor = brushModeActive ? 'crosshair' : (addWellOnClickMode ? 'crosshair' : 'grab');
+                    }
+                    if (isMouseDownForBrush) {
+                        isMouseDownForBrush = false;
+                    }
+                }
+            });
+            
+            canvas.addEventListener('mouseleave', () => {
+                // No specific action needed for mouseleave regarding panning, as mouseup on window handles it.
+                // If brush was active and mouse button released outside, isMouseDownForBrush would be false.
+            });
+
             canvas.addEventListener('click', (event) => {
-                const rect = canvas.getBoundingClientRect();
-                const x = event.clientX - rect.left; const y = event.clientY - rect.top;
-                if (addWellOnClickMode && enableGravityWells) {
-                    heavyObjects.push(new HeavyObject(x, y, gravityWellMass, gravityWellRadius));
-                    showToast(`Gravity well added at (${x.toFixed(0)}, ${y.toFixed(0)})`);
-                    addWellOnClickMode = false; return;
+                if (isPanning || isMouseDownForBrush) { // Check if a drag/brush operation just concluded
+                     // This check might be too aggressive if mouseup sets isPanning/isMouseDownForBrush to false
+                     // before the click event fires. Often, click fires after mouseup.
+                     // A small delay or a flag could be used if clicks are missed after drags.
+                    return;
                 }
-                if ((isPaused && !stepMode) || brushModeActive) return;
-                if (x >= 0 && x <= canvas.width && y >= 0 && y <= canvas.height) {
-                     if (particles.length < MAX_TOTAL_PARTICLES) { 
-                        const newP = new Particle(x, y, selectedColorForAdding); particles.push(newP);
-                        if(spatialGrid && newP.isAlive) spatialGrid.addParticle(newP);
-                        if(particleCountDisplay) particleCountDisplay.textContent = particles.length;
-                    } else { showToast(`Max particle limit (${MAX_TOTAL_PARTICLES}) reached`); }
+
+                const { x, y } = getMousePos(event);
+
+                if (addWellOnClickMode && enableGravityWells) {
+                    if (heavyObjects.length < parseInt(document.getElementById('numGravityWells').max)) {
+                        heavyObjects.push(new HeavyObject(x, y, gravityWellMass, gravityWellRadius));
+                        showToast(`Gravity well added at (${Math.round(x)}, ${Math.round(y)})`);
+                    } else {
+                        showToast('Max number of gravity wells reached.');
+                    }
+                    addWellOnClickMode = false;
+                    canvas.style.cursor = brushModeActive ? 'crosshair' : 'grab';
+                    const btn = document.getElementById('addGravityWellOnClickBtn');
+                    if(btn) {
+                        btn.classList.remove('bg-green-500', 'hover:bg-green-600');
+                        btn.classList.add('secondary');
+                    }
+                    return;
+                }
+                
+                if (!brushModeActive && !addWellOnClickMode) {
+                     addParticleAt(x, y, event.type);
                 }
             });
-            canvas.addEventListener('mousedown', (event) => { if (brushModeActive) { isMouseDown = true; addParticleAtMouse(event); } });
-            canvas.addEventListener('mousemove', (event) => { if (brushModeActive && isMouseDown) { addParticleAtMouse(event); } });
-            canvas.addEventListener('mouseup', () => { if (brushModeActive) { isMouseDown = false; } });
-            canvas.addEventListener('mouseleave', () => { if (brushModeActive) { isMouseDown = false; } });
-            canvas.addEventListener('touchstart', (e) => { if (brushModeActive) { isMouseDown = true; addParticleAtMouse(e.touches[0]); e.preventDefault(); } }, { passive: false });
-            canvas.addEventListener('touchmove', (e) => { if (brushModeActive && isMouseDown) { addParticleAtMouse(e.touches[0]); e.preventDefault(); } }, { passive: false });
-            canvas.addEventListener('touchend', () => { if (brushModeActive) { isMouseDown = false; } });
+
+            // Mouse Wheel Zooming (Zooms around cursor position)
+            canvas.addEventListener('wheel', (event) => {
+                event.preventDefault();
+
+                const rect = canvas.getBoundingClientRect();
+                const mouseX_canvas = event.clientX - rect.left; // Mouse X relative to canvas
+                const mouseY_canvas = event.clientY - rect.top;  // Mouse Y relative to canvas
+
+                // Current world coordinates under the mouse before zoom
+                const worldX_before = camera.x + (mouseX_canvas - canvas.width / 2) / camera.zoom;
+                const worldY_before = camera.y + (mouseY_canvas - canvas.height / 2) / camera.zoom;
+
+                const zoomIntensity = 0.1;
+                const wheelDelta = event.deltaY < 0 ? 1 : -1;
+                const oldZoom = camera.zoom;
+                let newZoom = camera.zoom * Math.exp(wheelDelta * zoomIntensity);
+                
+                const minZoom = 0.1;
+                const maxZoom = 5.0;
+                camera.zoom = Math.max(minZoom, Math.min(maxZoom, newZoom));
+
+                // Adjust camera.x and camera.y to keep the point under the mouse stationary
+                camera.x = worldX_before - (mouseX_canvas - canvas.width / 2) / camera.zoom;
+                camera.y = worldY_before - (mouseY_canvas - canvas.height / 2) / camera.zoom;
+                
+                const zoomSlider = document.getElementById('zoomLevel');
+                const zoomValueDisplay = document.getElementById('zoomLevelValue');
+                if (zoomSlider) zoomSlider.value = camera.zoom;
+                if (zoomValueDisplay) zoomValueDisplay.textContent = camera.zoom.toFixed(2);
+
+                if (isPaused && animationFrameId === null) drawScene();
+            }, { passive: false });
+
+            // Touch equivalents
+            canvas.addEventListener('touchstart', (e) => {
+                if (brushModeActive) {
+                    isMouseDownForBrush = true;
+                    const touch = e.touches[0];
+                    if (touch) {
+                        const { x, y } = getMousePos(touch);
+                        addParticleAt(x, y, e.type);
+                    }
+                    e.preventDefault();
+                } else if (!addWellOnClickMode && e.touches.length === 1) {
+                    isPanning = true;
+                    lastPanX = e.touches[0].clientX;
+                    lastPanY = e.touches[0].clientY;
+                    canvas.style.cursor = 'grabbing'; // May not be visible on touch devices
+                    e.preventDefault();
+                }
+                // Basic pinch-to-zoom could be added here by tracking two touches
+            }, { passive: false });
+
+            canvas.addEventListener('touchmove', (e) => {
+                if (isPanning && e.touches.length === 1) {
+                    const touch = e.touches[0];
+                    const dx = touch.clientX - lastPanX;
+                    const dy = touch.clientY - lastPanY;
+                    lastPanX = touch.clientX;
+                    lastPanY = touch.clientY;
+                    camera.x -= dx / camera.zoom;
+                    camera.y -= dy / camera.zoom;
+                    if (isPaused && animationFrameId === null) drawScene();
+                    e.preventDefault();
+                } else if (brushModeActive && isMouseDownForBrush) {
+                     const touch = e.touches[0];
+                     if (touch) {
+                        const { x, y } = getMousePos(touch);
+                        addParticleAt(x, y, e.type);
+                     }
+                    e.preventDefault();
+                }
+            }, { passive: false });
+
+            canvas.addEventListener('touchend', (e) => {
+                if (isPanning) {
+                    isPanning = false;
+                    canvas.style.cursor = brushModeActive ? 'crosshair' : (addWellOnClickMode ? 'crosshair' : 'grab');
+                }
+                if (isMouseDownForBrush) {
+                    isMouseDownForBrush = false;
+                }
+            });
         }
-        function addParticleAtMouse(event) {
-            const rect = canvas.getBoundingClientRect();
-            const x = event.clientX - rect.left; const y = event.clientY - rect.top;
-             if (x >= 0 && x <= canvas.width && y >= 0 && y <= canvas.height) {
+        
+        // Takes world coordinates (x, y) from getMousePos
+        function addParticleAt(x, y, eventType) {
+             // Check bounds against the WORLD dimensions
+             if (x >= 0 && x <= WORLD_WIDTH && y >= 0 && y <= WORLD_HEIGHT) {
                 if (particles.length < MAX_TOTAL_PARTICLES) {
                     const newP = new Particle(x, y, selectedColorForAdding); particles.push(newP);
                     if(spatialGrid && newP.isAlive) spatialGrid.addParticle(newP);
                     if(particleCountDisplay) particleCountDisplay.textContent = particles.length;
                 } else {
-                    if (isMouseDown) { showToast(`Max particle limit (${MAX_TOTAL_PARTICLES}) reached`); isMouseDown = false; }
+                    // Show toast on initial mousedown/click or touchstart, not every mousemove
+                    if (eventType === 'click' || eventType === 'mousedown' || eventType === 'touchstart') {
+                        showToast(`Max particle limit (${MAX_TOTAL_PARTICLES}) reached`);
+                    }
+                    // Stop dragging if limit hit during move
+                    if(isMouseDownForBrush && eventType !== 'click' && eventType !== 'touchstart') { // Check isMouseDownForBrush
+                        isMouseDownForBrush = false;
+                    }
                 }
             }
         }
@@ -897,63 +1132,42 @@
 
         // --- Main Simulation Loop ---
         function animationLoop(timestamp) {
-            const raw_dt = Math.min(0.1, (timestamp - lastFrameTime) / 1000 || 1/60); 
+            // --- Physics Update ---
+            const raw_dt = Math.min(0.1, (timestamp - lastFrameTime) / 1000 || 1/60);
             lastFrameTime = timestamp;
-
-            frameCount++; const now = performance.now();
-            const deltaFps = now - lastFpsUpdateTime; // Use global lastFpsUpdateTime
-            if (deltaFps >= 1000) { 
-                if(fpsDisplay) fpsDisplay.textContent = (frameCount / (deltaFps / 1000)).toFixed(1);
-                lastFpsUpdateTime = now; frameCount = 0;
-            }
             
             let newBornParticles = [];
             particles.forEach(p => {
                 if (p.isAlive) {
-                    const splitResult = p.update(raw_dt); 
+                    const splitResult = p.update(raw_dt);
                     if (splitResult && splitResult.length > 0) newBornParticles.push(...splitResult);
                 }
             });
-            
             if (newBornParticles.length > 0) {
                 if (particles.length + newBornParticles.length <= MAX_TOTAL_PARTICLES) particles.push(...newBornParticles);
                 else if (particles.length < MAX_TOTAL_PARTICLES) particles.push(...newBornParticles.slice(0, MAX_TOTAL_PARTICLES - particles.length));
             }
             particles = particles.filter(p => p.isAlive);
-            if(particleCountDisplay) particleCountDisplay.textContent = particles.length;
 
-            if (showTrails) {
-                ctx.fillStyle = `rgba(17, 24, 39, ${trailOpacity})`; ctx.fillRect(0, 0, canvas.width, canvas.height);
-            } else { ctx.clearRect(0, 0, canvas.width, canvas.height); }
-
-            // Apply Gravity Well Forces
             if (enableGravityWells && heavyObjects.length > 0) {
                 particles.forEach(p => {
                     if (!p.isAlive) return;
                     heavyObjects.forEach(well => {
                         const dx = well.x - p.x; const dy = well.y - p.y;
                         const distSq = dx * dx + dy * dy;
-                        // Only apply force if not too close (e.g., outside the well's visual radius + particle radius)
-                        // Increase (p.radius + well.radius) if particles get stuck or sling too fast
-                        if (distSq > (p.radius + well.radius + 5) * (p.radius + well.radius + 5) ) { // Add a small buffer
+                        if (distSq > (p.radius + well.radius + 5) * (p.radius + well.radius + 5) ) {
                             const dist = Math.sqrt(distSq);
                             const accelerationMag = gravityConstant * well.mass / distSq;
                             let ax = accelerationMag * dx / dist; let ay = accelerationMag * dy / dist;
                             p.vx += ax * raw_dt * simulationSpeed; p.vy += ay * raw_dt * simulationSpeed;
-                        } else if (distSq > 0.01 && distSq <= Math.pow(p.radius + well.radius, 2)) {
-                            // Optional: if particle enters well, maybe make it stick or get absorbed.
-                            // For now, just avoid extreme forces.
-                            // Could also reflect them or reduce velocity significantly.
-                            // p.isAlive = false; // Absorb
                         }
                     });
                 });
             }
 
-
             if (spatialGrid) {
-                spatialGrid.clear(); 
-                particles.forEach(p => { if(p.isAlive) spatialGrid.addParticle(p); }); 
+                spatialGrid.clear();
+                particles.forEach(p => { if(p.isAlive) spatialGrid.addParticle(p); });
                 particles.forEach(p1 => {
                     if (!p1.isAlive) return;
                     const nearby = spatialGrid.getNearbyParticles(p1);
@@ -966,19 +1180,62 @@
                     });
                 });
             }
-            particles.forEach(p => { if (p.isAlive) p.draw(); });
-            heavyObjects.forEach(well => well.draw()); // Draw gravity wells
             
-            ctx.shadowBlur = 0; 
+            // --- Drawing ---
+            drawScene(); // Call the dedicated drawing function
 
+            // --- FPS Counter ---
+            frameCount++; const now = performance.now();
+            const deltaFps = now - lastFpsUpdateTime;
+            if (deltaFps >= 1000) {
+                if(fpsDisplay) fpsDisplay.textContent = (frameCount / (deltaFps / 1000)).toFixed(1);
+                lastFpsUpdateTime = now; frameCount = 0;
+            }
+            if(particleCountDisplay) particleCountDisplay.textContent = particles.length;
+
+
+            // --- Loop Control ---
             if (stepMode) {
                 isPaused = true; stepMode = false;
                 const pauseBtn = document.getElementById('pauseResumeBtn');
                 if (pauseBtn) pauseBtn.textContent = 'Resume';
-                animationFrameId = null; return; 
+                animationFrameId = null; return;
             }
             if (!isPaused) animationFrameId = requestAnimationFrame(animationLoop);
-            else animationFrameId = null; 
+            else animationFrameId = null;
+        }
+
+        function drawScene() {
+            // 1. Apply trail effect or clear canvas (screen space)
+            if (showTrails) {
+                ctx.fillStyle = `rgba(17, 24, 39, ${trailOpacity})`; // Base background color with trail opacity
+                ctx.fillRect(0, 0, canvas.width, canvas.height);
+            } else {
+                ctx.fillStyle = '#111827'; // Solid background color
+                ctx.fillRect(0, 0, canvas.width, canvas.height);
+            }
+
+            // 2. Save the context state (now with the background/trail applied).
+            ctx.save();
+
+            // 3. Apply camera transformations to view the world.
+            ctx.translate(canvas.width / 2, canvas.height / 2);
+            ctx.scale(camera.zoom, camera.zoom);
+            ctx.translate(-camera.x, -camera.y);
+            
+            // 4. Draw particles and gravity wells (these are in world coordinates)
+            particles.forEach(p => {
+                if (p.isAlive) {
+                    p.draw();
+                }
+            });
+            heavyObjects.forEach(well => well.draw());
+            
+            // 5. Restore context to its pre-transform state (i.e., simple screen space with background/trail).
+            ctx.restore();
+            
+            // 6. Reset any lingering shadow effects for UI elements that might be drawn later on canvas (if any).
+            ctx.shadowBlur = 0;
         }
 
         // --- Resize Handling ---
@@ -991,27 +1248,33 @@
             canvas.height = Math.max(150, parent.clientHeight - infoDispHeight - 10);
 
             const cMaxDist = maxDist > 0 ? maxDist : 80;
-            if (canvas.width > 0 && canvas.height > 0) {
-                spatialGrid = new SpatialGrid(canvas.width, canvas.height, cMaxDist);
-                if (particles.length > 0 && spatialGrid) { 
+            // Spatial grid should always use WORLD_WIDTH and WORLD_HEIGHT
+            if (WORLD_WIDTH > 0 && WORLD_HEIGHT > 0) {
+                spatialGrid = new SpatialGrid(WORLD_WIDTH, WORLD_HEIGHT, cMaxDist);
+                if (particles.length > 0 && spatialGrid) {
                     spatialGrid.clear();
                     particles.forEach(p => { if(p.isAlive) spatialGrid.addParticle(p); });
                 }
-            } else { spatialGrid = new SpatialGrid(300, 150, cMaxDist); }
+            } else {
+                // Fallback if WORLD_WIDTH/HEIGHT are somehow not set, though they should be.
+                // Using canvas dimensions here is a last resort.
+                spatialGrid = new SpatialGrid(canvas.width > 0 ? canvas.width : 300, canvas.height > 0 ? canvas.height : 150, cMaxDist);
+            }
             
-            if (isPaused) { 
-                if (showTrails) {
-                    ctx.fillStyle = `rgba(17, 24, 39, ${trailOpacity})`; ctx.fillRect(0, 0, canvas.width, canvas.height);
-                } else { ctx.clearRect(0, 0, canvas.width, canvas.height); }
-                particles.forEach(p => { if(p.isAlive) p.draw(); });
-                heavyObjects.forEach(well => well.draw()); // Redraw wells if paused
-                ctx.shadowBlur = 0;
-            } else { startAnimationLoop(); }
+            // Always redraw the scene after resize to reflect new dimensions and current zoom
+            drawScene();
+            
+            // If simulation was running (not paused) and the loop isn't already scheduled, restart it.
+            // This handles cases where resize might have interrupted the loop.
+            if (!isPaused && animationFrameId === null) {
+                startAnimationLoop();
+            }
         }
         
         // --- Initial Setup ---
         window.addEventListener('load', () => {
-            resizeCanvas(); setupEventListeners(); 
+            resizeCanvas(); // Call resize first to set canvas dimensions
+            setupEventListeners(); // Then setup listeners that might depend on canvas or camera
             controlConfigurations.forEach(config => {
                 const inputEl = document.getElementById(config.id);
                 if (inputEl) {
