@@ -3,41 +3,82 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Particle Life: V2 - Optimizations & Biome Settings</title>
+    <title>Particle Life: WebGL Glow, Dynamic World & More</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700&display=swap" rel="stylesheet">
     <style>
         body {
             font-family: 'Inter', sans-serif;
-            overscroll-behavior: none; 
+            overscroll-behavior: none;
+            margin: 0; /* Ensure no default margin */
+            background-color: #0a0e14; /* Dark background for body */
         }
         canvas {
             display: block;
-            background-color: #111827; 
-            border: 1px solid #374151; 
-            border-radius: 0.5rem; 
-            touch-action: none; 
+            border: 1px solid #374151; /* border-gray-700 */
+            border-radius: 0.5rem; /* rounded-lg */
+            touch-action: none;
+            background-color: #111827; /* Fallback, but WebGL will clear */
         }
         .control-panel {
-            background-color: #1f2937; 
-            color: #d1d5db; 
-            border-radius: 0.5rem; 
+            background-color: #1f2937;
+            color: #d1d5db;
+            border-radius: 0.5rem;
+            padding: 1rem;
+            overflow-y: auto;
+            position: fixed;
+            right: 1rem;
+            top: 1rem;
+            bottom: 1rem;
+            width: 24rem; /* 384px */
+            transition: transform 0.3s ease-in-out, opacity 0.3s ease-in-out;
+            z-index: 500;
+        }
+        .control-panel.hidden-by-h-key {
+            display: none !important;
+        }
+        .control-panel.minimized-for-fullscreen {
+            transform: translateX(calc(100% - 40px - 1rem));
+            opacity: 0.85;
+        }
+        .control-panel.minimized-for-fullscreen.fully-expanded-in-fullscreen {
+           transform: translateX(0%);
+           opacity: 1;
+        }
+        .control-panel-tab-handle {
+            position: absolute;
+            left: -30px;
+            top: 50%;
+            transform: translateY(-50%);
+            padding: 15px 8px;
+            background-color: #374151;
+            color: #9ca3af;
+            border-top-left-radius: 0.25rem;
+            border-bottom-left-radius: 0.25rem;
+            cursor: pointer;
+            font-size: 1rem;
+            line-height: 1;
+            box-shadow: -2px 0 5px rgba(0,0,0,0.2);
+            display: none;
+        }
+        .control-panel.minimized-for-fullscreen .control-panel-tab-handle {
+            display: block;
         }
         .control-panel label, .control-panel h3, .control-panel h4, .control-panel select {
-            color: #9ca3af; 
+            color: #9ca3af; /* text-gray-400 */
         }
         .control-panel select {
-            background-color: #374151; 
-            border-radius: 0.25rem; 
+            background-color: #374151; /* bg-gray-700 */
+            border-radius: 0.25rem; /* rounded */
             padding: 0.25rem 0.5rem;
-            border-color: #4b5563; 
+            border-color: #4b5563; /* border-gray-600 */
         }
         .control-panel input[type="range"] {
             -webkit-appearance: none;
             appearance: none;
             width: 100%;
             height: 8px;
-            background: #4b5563; 
+            background: #4b5563; /* bg-gray-600 */
             outline: none;
             opacity: 0.7;
             transition: opacity .15s ease-in-out;
@@ -48,39 +89,39 @@
             appearance: none;
             width: 18px;
             height: 18px;
-            background: #60a5fa; 
+            background: #60a5fa; /* bg-blue-400 */
             cursor: pointer;
             border-radius: 50%;
-            border: 2px solid #1f2937; 
+            border: 2px solid #1f2937; /* border-gray-800 */
         }
         .control-panel input[type="range"]::-moz-range-thumb {
             width: 18px;
             height: 18px;
-            background: #60a5fa; 
+            background: #60a5fa; /* bg-blue-400 */
             cursor: pointer;
             border-radius: 50%;
-            border: 2px solid #1f2937; 
+            border: 2px solid #1f2937; /* border-gray-800 */
         }
         .control-panel button {
-            background-color: #3b82f6; 
+            background-color: #3b82f6; /* bg-blue-500 */
             color: white;
             transition: background-color 0.3s;
         }
         .control-panel button:hover {
-            background-color: #2563eb; 
+            background-color: #2563eb; /* bg-blue-600 */
         }
         .control-panel button.secondary {
-            background-color: #4b5563; 
+            background-color: #4b5563; /* bg-gray-600 */
         }
         .control-panel button.secondary:hover {
-            background-color: #6b7280; 
+            background-color: #6b7280; /* bg-gray-500 */
         }
         .rule-grid table {
             border-collapse: collapse;
             width: 100%;
         }
         .rule-grid th, .rule-grid td {
-            border: 1px solid #4b5563; 
+            border: 1px solid #4b5563; /* border-gray-600 */
             padding: 4px;
             text-align: center;
             min-width: 30px;
@@ -89,7 +130,7 @@
             font-size: 0.8rem;
         }
         .rule-grid th {
-            background-color: #374151; 
+            background-color: #374151; /* bg-gray-700 */
         }
         .color-picker-button {
             width: 24px;
@@ -98,18 +139,18 @@
             margin: 2px;
         }
         .color-picker-button.selected {
-            border-color: #60a5fa; 
-            box-shadow: 0 0 0 2px #60a5fa; 
+            border-color: #60a5fa; /* border-blue-400 */
+            box-shadow: 0 0 0 2px #60a5fa; /* ring-2 ring-blue-400 */
         }
         #toast-message {
             position: fixed;
             bottom: 20px;
             left: 50%;
             transform: translateX(-50%);
-            background-color: #1f2937; 
+            background-color: #1f2937; /* bg-gray-800 */
             color: white;
             padding: 10px 20px;
-            border-radius: 0.5rem; 
+            border-radius: 0.5rem; /* rounded-lg */
             box-shadow: 0 2px 10px rgba(0,0,0,0.5);
             z-index: 1000;
             opacity: 0;
@@ -124,7 +165,7 @@
             transition: max-height 0.3s ease-out, opacity 0.3s ease-out, margin 0.3s ease-out, padding 0.3s ease-out;
             overflow: hidden;
         }
-        .conditional-control.hidden {
+        .conditional-control.hidden { /* For internal conditional controls */
              max-height: 0 !important;
              opacity: 0 !important;
              margin-top: 0 !important;
@@ -141,24 +182,24 @@
         <canvas id="particleCanvas" class="flex-grow"></canvas>
         <div id="infoDisplay" class="text-sm mt-2 p-2 bg-gray-800 rounded-md text-center lg:text-left">
             Particles: <span id="particleCount">0</span> | FPS: <span id="fpsDisplay">0</span>
+            | BH Absorbed: <span id="absorbedByBHCount">0</span>
+            | World: <span id="worldSizeDisplay">0x0</span>
         </div>
     </div>
 
     <div class="control-panel w-full lg:w-96 p-4 space-y-4 overflow-y-auto max-h-full">
+        <div class="control-panel-tab-handle" title="Toggle Panel">☰</div>
         <h3 class="text-xl font-semibold border-b border-gray-700 pb-2">Controls</h3>
-
         <div>
             <label for="numParticles" class="block text-sm font-medium">Number of Particles: <span id="numParticlesValue">200</span></label>
-            <input type="range" id="numParticles" min="10" max="1000" value="200" class="w-full">
-        </div>
+            <input type="range" id="numParticles" min="10" max="5000" value="200" step="10" class="w-full"> </div>
         <div>
             <label for="numColors" class="block text-sm font-medium">Number of Colors: <span id="numColorsValue">4</span></label>
             <input type="range" id="numColors" min="2" max="8" value="4" class="w-full">
         </div>
          <div>
-            <label for="particleRadius" class="block text-sm font-medium">Base Particle Radius: <span id="particleRadiusValue">2</span></label>
-            <input type="range" id="particleRadius" min="1" max="10" value="2" step="0.5" class="w-full">
-        </div>
+            <label for="particleRadius" class="block text-sm font-medium">Base Particle Radius (px): <span id="particleRadiusValue">2</span></label>
+            <input type="range" id="particleRadius" min="1" max="20" value="2" step="0.5" class="w-full"> </div>
 
         <h4 class="text-lg font-medium pt-2">Interaction Rules</h4>
         <div id="ruleEditor" class="rule-grid"></div>
@@ -270,7 +311,7 @@
             </div>
             <div>
                 <label for="energyParticleRadius" class="block text-sm font-medium">Energy Particle Radius: <span id="energyParticleRadiusValue">1.5</span></label>
-                <input type="range" id="energyParticleRadius" min="0.5" max="5" value="1.5" step="0.1" class="w-full">
+                <input type="range" id="energyParticleRadius" min="0.5" max="10" value="1.5" step="0.1" class="w-full">
             </div>
             <div>
                 <label for="absorptionRadiusFactor" class="block text-sm font-medium">Base Absorption Radius Factor: <span id="absorptionRadiusFactorValue">2.0</span></label>
@@ -311,10 +352,10 @@
         </div>
         <div id="biomeNoiseParamsContainer" class="conditional-control space-y-2 hidden">
             <div>
-                <label for="noiseScaleSlider" class="block text-sm font-medium">Noise Scale: <span id="noiseScaleValue">150</span></label>
+                <label for="noiseScaleSlider" class="block text-sm font-medium">Noise Scale (lower = larger features): <span id="noiseScaleValue">150</span></label>
                 <input type="range" id="noiseScaleSlider" min="20" max="500" value="150" step="10" class="w-full">
             </div>
-            <div>
+             <div>
                 <label for="noiseOctavesSlider" class="block text-sm font-medium">Noise Octaves: <span id="noiseOctavesValue">3</span></label>
                 <input type="range" id="noiseOctavesSlider" min="1" max="8" value="3" step="1" class="w-full">
             </div>
@@ -324,19 +365,19 @@
             </div>
             <button id="regenerateNoiseSeedBtn" class="w-full mt-1 py-2 px-4 rounded-md text-sm secondary">Regenerate Noise Seed</button>
         </div>
-        
-        <h4 class="text-lg font-medium pt-2">Gravity Wells</h4>
+
+        <h4 class="text-lg font-medium pt-2">Gravity Wells (Black Holes)</h4>
         <div>
             <input type="checkbox" id="enableGravityWells" class="mr-2 rounded">
-            <label for="enableGravityWells" class="text-sm font-medium">Enable Gravity Wells</label>
+            <label for="enableGravityWells" class="text-sm font-medium">Enable Black Holes</label>
         </div>
         <div id="gravityWellParamsContainer" class="conditional-control space-y-2 hidden">
             <div>
-                <label for="numGravityWells" class="block text-sm font-medium">Number of Wells: <span id="numGravityWellsValue">1</span></label>
+                <label for="numGravityWells" class="block text-sm font-medium">Number of Black Holes: <span id="numGravityWellsValue">1</span></label>
                 <input type="range" id="numGravityWells" min="0" max="5" value="1" step="1" class="w-full">
             </div>
             <div>
-                <label for="gravityWellMass" class="block text-sm font-medium">Well Mass: <span id="gravityWellMassValue">100000</span></label>
+                <label for="gravityWellMass" class="block text-sm font-medium">BH Mass: <span id="gravityWellMassValue">100000</span></label>
                 <input type="range" id="gravityWellMass" min="10000" max="500000" value="100000" step="10000" class="w-full">
             </div>
             <div>
@@ -344,21 +385,21 @@
                 <input type="range" id="gravityConstant" min="0.01" max="5" value="0.5" step="0.01" class="w-full">
             </div>
             <div>
-                <label for="gravityWellRadius" class="block text-sm font-medium">Well Visual Radius: <span id="gravityWellRadiusValue">10</span></label>
-                <input type="range" id="gravityWellRadius" min="3" max="20" value="10" step="1" class="w-full">
+                <label for="gravityWellRadius" class="block text-sm font-medium">BH Event Horizon Radius (px): <span id="gravityWellRadiusValue">10</span></label>
+                <input type="range" id="gravityWellRadius" min="3" max="50" value="10" step="1" class="w-full">
             </div>
-            <button id="addGravityWellOnClickBtn" class="w-full mt-1 py-2 px-4 rounded-md text-sm secondary">Add Well at Next Click</button>
+            <button id="addGravityWellOnClickBtn" class="w-full mt-1 py-2 px-4 rounded-md text-sm secondary">Add Black Hole at Next Click</button>
         </div>
 
 
-        <h4 class="text-lg font-medium pt-2">Visuals</h4>
+        <h4 class="text-lg font-medium pt-2">Visuals (WebGL)</h4>
         <div>
             <input type="checkbox" id="showTrails" checked class="mr-2 rounded">
             <label for="showTrails" class="text-sm font-medium">Show Particle Trails</label>
         </div>
         <div>
-            <label for="trailOpacity" class="block text-sm font-medium">Trail Opacity: <span id="trailOpacityValue">0.1</span></label>
-            <input type="range" id="trailOpacity" min="0.01" max="0.5" value="0.1" step="0.01" class="w-full">
+            <label for="trailOpacity" class="block text-sm font-medium">Trail Opacity (Clear Alpha): <span id="trailOpacityValue">0.1</span></label>
+            <input type="range" id="trailOpacity" min="0.01" max="1.0" value="0.1" step="0.01" class="w-full">
         </div>
         <div>
             <input type="checkbox" id="particleGlow" checked class="mr-2 rounded">
@@ -393,263 +434,368 @@
 
     <script>
         const canvas = document.getElementById('particleCanvas');
-        const ctx = canvas.getContext('2d');
+        // WebGL rendering context
+        const gl = canvas.getContext('webgl', { premultipliedAlpha: false, antialias: true }) || canvas.getContext('experimental-webgl', { premultipliedAlpha: false, antialias: true });
 
-        // --- Perlin Noise Implementation (Simplified Classic Perlin) ---
+        if (!gl) {
+            alert("WebGL not supported or disabled! This simulation requires WebGL.");
+            // Hide canvas or show error message
+            canvas.style.display = 'none';
+            document.getElementById('infoDisplay').innerHTML = '<p class="text-red-500 text-center">WebGL is not supported by your browser. The simulation cannot run.</p>';
+        }
+
+        // Shader sources
+        const particleVertexShaderSource = `
+            attribute vec2 a_position;
+            attribute vec3 a_color;
+            attribute float a_size;
+            attribute float a_type; // 0: normal, 1: energy, 2: blackhole core, 3: blackhole disk
+
+            uniform vec2 u_resolution;
+            uniform vec3 u_camera; // x, y, zoom
+
+            varying vec3 v_color;
+            varying float v_size;
+            varying float v_type;
+
+            void main() {
+                // Apply camera pan and zoom to position
+                vec2 pos = (a_position - u_camera.xy) * u_camera.z;
+
+                // Convert to WebGL clip space (-1.0 to 1.0)
+                // u_resolution is canvas width/height
+                // u_resolution / 2.0 gives half-width/height, which is the extent from center to edge in view space pixels
+                vec2 clipSpace = pos / (u_resolution / 2.0);
+                                                                            
+                gl_Position = vec4(clipSpace * vec2(1.0, -1.0), 0.0, 1.0); // Flip Y for WebGL convention
+                gl_PointSize = a_size * u_camera.z; // Scale point size by zoom
+                
+                v_color = a_color;
+                v_size = a_size * u_camera.z; 
+                v_type = a_type;
+            }
+        `;
+
+        const particleFragmentShaderSource = `
+            precision mediump float;
+            varying vec3 v_color;
+            varying float v_size; 
+            varying float v_type;
+
+            uniform bool u_particleGlow;
+            uniform float u_time; 
+
+            void main() {
+                float dist = distance(gl_PointCoord, vec2(0.5, 0.5)); // Distance from center of point sprite
+
+                if (dist > 0.5) {
+                    discard; // Make points circular
+                }
+
+                vec3 finalColor = v_color;
+                float finalAlpha = 1.0;
+
+                if (v_type == 1.0) { // Energy particle
+                    float pulse = 0.8 + sin(u_time * 0.01 + v_size * 0.1) * 0.2; 
+                    finalColor = vec3(1.0, 1.0, 0.0) * pulse; 
+                    finalAlpha = (0.5 - dist) * 2.0 * pulse; 
+                     if (u_particleGlow) {
+                        float glow = smoothstep(0.5, 0.1, dist) * 0.7 * pulse;
+                        finalColor += glow * vec3(1.0,1.0,0.5); 
+                        finalAlpha = max(finalAlpha, glow * 0.5);
+                    }
+                } else if (v_type == 2.0) { // Blackhole Core
+                    finalColor = vec3(0.0, 0.0, 0.0);
+                    finalAlpha = 1.0; 
+                } else if (v_type == 3.0) { // Blackhole Accretion Disk Element
+                    float angle_factor = gl_PointCoord.x * 6.283 + u_time * 0.0005; 
+                    float disk_intensity = 0.3 + sin(angle_factor + v_size * 0.1) * 0.2; 
+                    finalColor = mix(vec3(1.0, 0.8, 0.6), vec3(0.8, 0.7, 1.0), sin(angle_factor*0.5)) * disk_intensity;
+                    finalAlpha = (0.5 - dist) * 1.5 * disk_intensity;
+
+                } else { // Normal particle
+                    if (u_particleGlow) {
+                        float glowFalloff = smoothstep(0.5, 0.15, dist); 
+                        float glowAmount = glowFalloff * 0.8;          
+                        finalColor += glowAmount * v_color * 1.5;       
+                        finalAlpha = smoothstep(0.5, 0.3, dist) + glowAmount * 0.5; 
+                    } else {
+                        finalAlpha = smoothstep(0.5, 0.45, dist); 
+                    }
+                }
+                
+                gl_FragColor = vec4(finalColor, finalAlpha);
+            }
+        `;
+        
+        const backgroundVertexShaderSource = `
+            attribute vec2 a_position;
+            varying vec2 v_texCoord;
+            void main() {
+                v_texCoord = a_position * 0.5 + 0.5; 
+                v_texCoord.y = 1.0 - v_texCoord.y; // Y flip for texture coordinates
+                gl_Position = vec4(a_position, 0.0, 1.0);
+            }
+        `;
+
+        const backgroundFragmentShaderSource = `
+            precision mediump float;
+            varying vec2 v_texCoord;
+            uniform sampler2D u_texture; // Biome texture
+
+            void main() {
+                // This shader is only used when biomes are enabled.
+                // It directly samples the biome texture.
+                gl_FragColor = texture2D(u_texture, v_texCoord);
+            }
+        `;
+
+
+        // WebGL Program and Buffers
+        let particleShaderProgram, backgroundShaderProgram;
+        let particlePositionBuffer, particleColorBuffer, particleSizeBuffer, particleTypeBuffer;
+        let particlePositionLocation, particleColorLocation, particleSizeLocation, particleTypeLocation;
+        let particleResolutionLocation, particleCameraLocation, particleGlowLocation, particleTimeLocation;
+
+        let backgroundPositionBuffer, backgroundPositionLocation, backgroundTextureLocation;
+        // Removed: backgroundShowTrailsLocation 
+
+        let biomeTexture;
+
+
+        // Perlin Noise (unchanged)
         class PerlinNoise {
             constructor(seed = Math.random()) {
-                this.p = new Uint8Array(512); 
-                this.perm = []; 
-                this.grad3 = [ 
-                               [1,1,0],[-1,1,0],[1,-1,0],[-1,-1,0],
+                this.p = new Uint8Array(512);
+                this.seedValue = seed;
+                this.perm = [];
+                this.grad3 = [ [1,1,0],[-1,1,0],[1,-1,0],[-1,-1,0],
                                [1,0,1],[-1,0,1],[1,0,-1],[-1,0,-1],
                                [0,1,1],[0,-1,1],[0,1,-1],[0,-1,-1] ];
-                this.seedValue = seed; 
                 this.seed(this.seedValue);
             }
-
             seed(s) {
-                this.seedValue = s; 
-                let currentSeed = s; 
-                let random = () => { 
-                    let x = Math.sin(currentSeed++) * 10000;
+                this.seedValue = s;
+                let random = () => {
+                    let x = Math.sin(this.seedValue++) * 10000;
                     return x - Math.floor(x);
                 };
                 for (let i = 0; i < 256; i++) this.p[i] = i;
                 for (let i = 255; i > 0; i--) {
                     const j = Math.floor(random() * (i + 1));
-                    [this.p[i], this.p[j]] = [this.p[j], this.p[i]]; 
+                    [this.p[i], this.p[j]] = [this.p[j], this.p[i]];
                 }
                 for (let i = 0; i < 256; i++) {
                     this.p[i + 256] = this.p[i];
-                    this.perm[i] = this.perm[i+256] = this.p[i]; 
+                    this.perm[i] = this.perm[i+256] = this.p[i];
                 }
             }
-
             fade(t) { return t * t * t * (t * (t * 6 - 15) + 10); }
             lerp(t, a, b) { return a + t * (b - a); }
-            grad(hash, x, y, z) { 
-                const h = hash & 15;      
-                const u = h < 8 ? x : y;  
-                const v = h < 4 ? y : (h === 12 || h === 14 ? x : z); 
-                return ((h & 1) === 0 ? u : -u) + ((h & 2) === 0 ? v : -v); 
+            grad(hash, x, y, z) {
+                const h = hash & 15;
+                const u = h < 8 ? x : y;
+                const v = h < 4 ? y : h === 12 || h === 14 ? x : z;
+                return ((h & 1) === 0 ? u : -u) + ((h & 2) === 0 ? v : -v);
             }
-
             noise(x, y) {
-                const X = Math.floor(x) & 255; 
-                const Y = Math.floor(y) & 255; 
-                x -= Math.floor(x); 
-                y -= Math.floor(y); 
+                const X = Math.floor(x) & 255;
+                const Y = Math.floor(y) & 255;
+                x -= Math.floor(x);
+                y -= Math.floor(y);
                 const u = this.fade(x);
                 const v = this.fade(y);
-                const A = this.p[X] + Y;
-                const AA = this.p[A];
-                const AB = this.p[A + 1];
-                const B = this.p[X + 1] + Y;
-                const BA = this.p[B];
-                const BB = this.p[B + 1];
-                return this.lerp(v, this.lerp(u, this.grad(this.p[AA], x, y, 0),      
-                                                this.grad(this.p[BA], x - 1, y, 0)),   
-                                    this.lerp(u, this.grad(this.p[AB], x, y - 1, 0),  
-                                                this.grad(this.p[BB], x - 1, y - 1, 0))); 
+                const A = this.p[X] + Y, AA = this.p[A], AB = this.p[A + 1];
+                const B = this.p[X + 1] + Y, BA = this.p[B], BB = this.p[B + 1];
+
+                return this.lerp(v, this.lerp(u, this.grad(this.p[AA], x, y, 0),
+                                                this.grad(this.p[BA], x - 1, y, 0)),
+                                    this.lerp(u, this.grad(this.p[AB], x, y - 1, 0),
+                                                this.grad(this.p[BB], x - 1, y - 1, 0)));
             }
-            
             octaveNoise(x, y, octaves = 3, persistence = 0.5) {
                 let total = 0;
                 let frequency = 1;
                 let amplitude = 1;
-                let maxValue = 0;  
+                let maxValue = 0;
 
                 for(let i=0; i < octaves; i++) {
                     total += this.noise(x * frequency, y * frequency) * amplitude;
                     maxValue += amplitude;
-                    amplitude *= persistence; 
-                    frequency *= 2;         
+                    amplitude *= persistence;
+                    frequency *= 2;
                 }
-                return total / maxValue; 
+                return total / maxValue;
             }
         }
 
 
-        // --- Global State & Parameters ---
         let particles = [];
         let rules = [];
-        let COLORS = [];
+        let COLORS_HSL = []; 
+        let COLORS_RGB = []; 
 
-        const WORLD_WIDTH = 2000; 
-        const WORLD_HEIGHT = 1200;
+        let WORLD_WIDTH = canvas.width;
+        let WORLD_HEIGHT = canvas.height;
 
-        // Noise Biome Settings
         let noiseGenerator;
-        let noiseScale = 150; 
-        let noiseSeed = Math.random(); 
-        let noiseOctaves = 3; 
-        let noisePersistence = 0.45; 
-
-        // Offscreen canvas for pre-rendered noise biome background
-        let offscreenNoiseCanvas = null;
+        let noiseScale = 150;
+        let noiseSeed = Math.random();
+        let noiseOctaves = 3;
+        let noisePersistence = 0.45;
+        let worldNoiseNeedsUpdate = true;
+        let offscreenNoiseCanvas = null; 
         let offscreenNoiseCtx = null;
-        let worldNoiseNeedsUpdate = true; // Flag to trigger full re-render of offscreen canvas
 
-        // --- Biome Definitions ---
-        const BIOME_SETTINGS = {
+        const BIOME_SETTINGS = { 
             VOID: {
                 label: "Void",
-                thresholdMax: -0.4, 
-                colorFn: (noiseVal, worldX, worldY) => ({ 
-                    r: 5 + Math.floor(Math.abs(noiseVal) * 10), // abs to ensure positive addition
-                    g: 5 + Math.floor(Math.abs(noiseVal) * 10),
-                    b: 10 + Math.floor(Math.abs(noiseVal) * 20), 
-                    a: 255 
-                }),
-                effects: {
-                    viscosityMultiplier: 0.8,
-                    forceFactorMultiplier: 0.9,
+                thresholdMax: -0.4,
+                colorFn: (noiseVal, time, worldX, worldY, secondaryNoiseFn) => {
+                    let r = 5 + Math.floor(noiseVal*-10);
+                    let g = 5 + Math.floor(noiseVal*-10);
+                    let b = 10 + Math.floor(noiseVal*-20);
+                    const starCheckX = Math.floor(worldX / 50);
+                    const starCheckY = Math.floor(worldY / 50);
+                    const starHash = (starCheckX * 18397) ^ (starCheckY * 39916801);
+                    if ((starHash % 250) === 0) {
+                       const starBrightness = 50 + (starHash % 50);
+                       r = Math.max(r, starBrightness); g = Math.max(g, starBrightness); b = Math.max(b, starBrightness);
+                    }
+                    return { r, g, b, a: 255 };
                 },
-                spawnWeight: 0 
+                effects: { viscosityMultiplier: 0.8, forceFactorMultiplier: 0.9, },
+                spawnWeight: 0
             },
             NEBULA: {
                 label: "Nebula",
-                thresholdMin: -0.4, // Note: Using < thresholdMax in loop, so -0.4 is exclusive to VOID if checked first or inclusive here
+                thresholdMin: -0.4,
                 thresholdMax: 0.3,
-                colorFn: (noiseVal, worldX, worldY) => {
+                colorFn: (noiseVal, time, worldX, worldY, secondaryNoiseFn) => {
                     const intensity = (noiseVal - (-0.4)) / (0.3 - (-0.4));
-                    // Static patterns based on worldX/worldY, not time for the texture
-                    return { 
-                        r: Math.floor(30 + intensity * 60 + Math.sin(worldX*0.015 + worldY*0.005)*10), 
-                        g: Math.floor(20 + intensity * 30 + Math.sin(worldY*0.015 + worldX*0.008)*10),
-                        b: Math.floor(50 + intensity * 90 + Math.sin((worldX+worldY)*0.008)*15),
-                        a: 80 + Math.floor(intensity * 90) 
+                    return {
+                        r: Math.floor(30 + intensity * 60 + Math.sin(worldX*0.01 + time*0.0005)*10),
+                        g: Math.floor(20 + intensity * 30 + Math.sin(worldY*0.01 + time*0.0005)*10),
+                        b: Math.floor(50 + intensity * 90 + Math.sin((worldX+worldY)*0.005 + time*0.0005)*15),
+                        a: 80 + Math.floor(intensity * 90)
                     };
                 },
-                effects: {
-                    forceFactorMultiplier: 1.05,
-                },
-                spawnWeight: 5 
+                effects: { forceFactorMultiplier: 1.05, },
+                spawnWeight: 5
             },
             ASTEROID_FIELD: {
                 label: "Asteroid Field",
                 thresholdMin: 0.3,
                 thresholdMax: 0.7,
-                colorFn: (noiseVal, worldX, worldY) => {
-                    const intensity = (noiseVal - 0.3) / (0.7 - 0.3);
-                     // Add some subtle grain/texture using world coordinates
-                    const grain = Math.sin(worldX * 0.1) * Math.sin(worldY * 0.1) * 10;
+                colorFn: (noiseVal, time, worldX, worldY, secondaryNoiseFn) => {
+                     const intensity = (noiseVal - 0.3) / (0.7 - 0.3);
+                     const texNoise = secondaryNoiseFn(worldX / (noiseScale*0.2), worldY / (noiseScale*0.2)) * 0.5 + 0.5; 
+                     const baseR = 60 + intensity * 20;
+                     const baseG = 55 + intensity * 15;
+                     const baseB = 50 + intensity * 10;
                     return {
-                        r: Math.max(0, Math.min(255, Math.floor(60 + intensity * 20 + grain))), 
-                        g: Math.max(0, Math.min(255, Math.floor(55 + intensity * 15 + grain))), 
-                        b: Math.max(0, Math.min(255, Math.floor(50 + intensity * 10 + grain))), 
-                        a: 200 + Math.floor(intensity * 55) 
+                        r: Math.floor(baseR * (0.8 + texNoise * 0.2)),
+                        g: Math.floor(baseG * (0.8 + texNoise * 0.2)),
+                        b: Math.floor(baseB * (0.8 + texNoise * 0.2)),
+                        a: 200 + Math.floor(intensity * 55)
                     };
                 },
                 effects: {
-                    viscosityMultiplier: (noiseVal) => 2.0 + (noiseVal - 0.3) * 7, 
+                    viscosityMultiplier: (noiseVal) => 2.0 + (noiseVal - 0.3) * 7,
                     forceFactorMultiplier: 0.7,
                 },
-                spawnWeight: 1 
+                spawnWeight: 1
             },
             RADIATION_ZONE: {
                 label: "Radiation Zone",
                 thresholdMin: 0.7,
-                // No thresholdMax, implies it goes to infinity (or max noise value)
-                colorFn: (noiseVal, worldX, worldY) => {
-                    // Static base color for texture, pulsing can be an overlay or particle effect
-                    const intensity = Math.min(1, (noiseVal - 0.7) / 0.3); // Intensity within a typical range above threshold
+                colorFn: (noiseVal, time, worldX, worldY, secondaryNoiseFn) => {
+                    const phase = Math.sin(time * 0.003 + noiseVal * 10 + worldX * 0.005 + worldY * 0.003) * 0.5 + 0.5;
                     return {
-                        r: Math.floor(intensity * 20 + 10), 
-                        g: Math.floor(intensity * 100 + 40), 
-                        b: Math.floor(intensity * 20 + 10), 
-                        a: 180 + Math.floor(intensity * 50) 
+                        r: Math.floor(phase * 20 + 10),
+                        g: Math.floor(phase * 130 + 40),
+                        b: Math.floor(phase * 20 + 10),
+                        a: 150 + Math.floor(phase * 50)
                     };
                 },
                 effects: {
-                    viscosityMultiplier: 1.05, 
-                    mutationBoostFactor: 5.0,   
-                    colorMutationBoostFactor: 7.0, 
-                    agePenalty: 0.08             
+                    viscosityMultiplier: 1.05,
+                    mutationBoostFactor: 5.0,
+                    colorMutationBoostFactor: 7.0,
+                    agePenalty: 0.08
                 },
                 spawnWeight: 0
             },
-            DEFAULT_SPACE: { 
+            DEFAULT_SPACE: {
                 label: "Normal Space",
-                colorFn: (noiseVal, worldX, worldY) => ({ r: 17, g: 24, b: 39, a: 255 }), 
+                colorFn: (noiseVal, time, worldX, worldY, secondaryNoiseFn) => ({ r: 17, g: 24, b: 39, a: 255 }), 
                 effects: {
                     viscosityMultiplier: 1.0,
                     forceFactorMultiplier: 1.0,
                 },
-                spawnWeight: 2 
+                spawnWeight: 2
             }
         };
 
-
-        let camera = { x: WORLD_WIDTH / 2, y: WORLD_HEIGHT / 2, zoom: 1 }; 
-        
-        let numParticles = 200; 
+        let camera = { x: WORLD_WIDTH / 2, y: WORLD_HEIGHT / 2, zoom: 1 };
+        let numParticles = 200;
         let particleRadius = 2; 
         let numColors = 4;
-        let forceFactor = 5000; 
-        let maxDist = 80; 
-        let viscosity = 0.02; 
-        let simulationSpeed = 1; 
-        let maxForce = 1000; 
-        
-        let forceModel = 'inverseR'; 
-        let ljEquilibriumDistance = 40; 
-        let boundaryCondition = 'bounce'; 
-
-        let enableAgeDeath = false; 
-        let maxParticleAge = 1000; 
-
-        let enableSplitting = false; 
-        let reproductionAgeFactor = 0.8; 
-        let reproductionChance = 0.5; 
-        let offspringCount = 1; 
-        let offspringVelocityBoost = 1.1; 
-        let enableColorMutation = false; 
-        let mutationChance = 0.1; 
-
+        let forceFactor = 5000;
+        let maxDist = 80;
+        let viscosity = 0.02;
+        let simulationSpeed = 1;
+        let maxForce = 1000;
+        let forceModel = 'inverseR';
+        let ljEquilibriumDistance = 40;
+        let boundaryCondition = 'bounce';
+        let enableAgeDeath = false;
+        let maxParticleAge = 1000;
+        let enableSplitting = false;
+        let reproductionAgeFactor = 0.8;
+        let reproductionChance = 0.5;
+        let offspringCount = 1;
+        let offspringVelocityBoost = 1.1;
+        let enableColorMutation = false;
+        let mutationChance = 0.1;
         let heavyObjects = []; 
         let enableGravityWells = false;
         let numGravityWells = 1;
         let gravityWellMass = 100000;
         let gravityConstant = 0.5;
         let gravityWellRadius = 10; 
-        let addWellOnClickMode = false; 
+        let addWellOnClickMode = false;
+        let enableBiomes = false;
+        let settings = { 
+            enableAbsorptionExplosion: false,
+            energyParticlesPerExplosion: 5,
+            lifeExtensionPerEnergyParticle: 300,
+            energyParticleLifespan: 400,
+            energyParticleRadius: 1.5, 
+            absorptionRadiusFactor: 2.0,
+            massGainPerEnergy: 0.05,
+            maxParticleMass: 5.0,
 
-        let enableBiomes = false; 
-
-        let settings = {
-            enableAbsorptionExplosion: false, 
-            energyParticlesPerExplosion: 5, 
-            lifeExtensionPerEnergyParticle: 300, 
-            energyParticleLifespan: 400,        
-            energyParticleRadius: 1.5,
-            energyParticleColor: 'rgba(255, 255, 0, 0.85)', 
-            absorptionRadiusFactor: 2.0, 
-            massGainPerEnergy: 0.05, 
-            maxParticleMass: 5.0,    
-            
-            ENERGY_SEEK_THRESHOLD_AGE_FACTOR: 0.7, 
-            FLEE_COOLDOWN: 120, 
-            SEEK_COOLDOWN: 60,  
-            DANGER_THRESHOLD: -0.5, 
-            AI_SEEK_FORCE_MULTIPLIER: 0.5, 
+            ENERGY_SEEK_THRESHOLD_AGE_FACTOR: 0.7,
+            FLEE_COOLDOWN: 120,
+            SEEK_COOLDOWN: 60,
+            DANGER_THRESHOLD: -0.5,
+            AI_SEEK_FORCE_MULTIPLIER: 0.5,
             AI_SIGHT_RADIUS_MULTIPLIER: 1.5,
 
             enablePredatorPrey: false,
-            lifeGainFromHunt: 250, 
-            massGainFromHunt: 0.25, 
-            predatorSplitChanceOnHunt: 0.1, 
-            HUNTING_COOLDOWN: 90, 
+            lifeGainFromHunt: 250,
+            massGainFromHunt: 0.25,
+            predatorSplitChanceOnHunt: 0.1,
+            HUNTING_COOLDOWN: 90,
         };
-
-        let showTrails = true; 
+        let showTrails = true;
         let trailOpacity = 0.1; 
-        let particleGlow = true; 
+        let particleGlow = true;
         let isPaused = false;
-        let stepMode = false; 
-        let selectedColorForAdding = 0; 
-        let brushModeActive = false; 
+        let stepMode = false;
+        let selectedColorForAdding = 0;
+        let brushModeActive = false;
         let isMouseDownForBrush = false;
         let isPanning = false;
         let lastPanX = 0, lastPanY = 0;
@@ -658,26 +804,30 @@
         let lastFpsUpdateTime = performance.now();
         const fpsDisplay = document.getElementById('fpsDisplay');
         const particleCountDisplay = document.getElementById('particleCount');
-        let controlConfigurations = []; 
-        let animationFrameId = null; 
-        const MAX_TOTAL_PARTICLES = 6000; 
+        const absorbedByBHCountDisplay = document.getElementById('absorbedByBHCount');
+        const worldSizeDisplay = document.getElementById('worldSizeDisplay');
+        let totalAbsorbedByBH = 0;
 
-        class SpatialGrid {
+        let controlConfigurations = [];
+        let animationFrameId = null;
+        const MAX_TOTAL_PARTICLES = 15000; 
+
+        class SpatialGrid { 
             constructor(width, height, cellSize) {
                 this.width = width; this.height = height;
-                this.cellSize = cellSize > 0 ? cellSize : 1; 
+                this.cellSize = cellSize > 0 ? cellSize : 1;
                 this.cols = Math.ceil(width / this.cellSize);
                 this.rows = Math.ceil(height / this.cellSize);
                 this.grid = new Array(this.cols * this.rows).fill(null).map(() => []);
             }
-            clear() { this.grid.forEach(cell => cell.length = 0); } 
+            clear() { this.grid.forEach(cell => cell.length = 0); }
             getCellIndex(x, y) {
                 const col = Math.max(0, Math.min(this.cols - 1, Math.floor(x / this.cellSize)));
                 const row = Math.max(0, Math.min(this.rows - 1, Math.floor(y / this.cellSize)));
                 return row * this.cols + col;
             }
             addParticle(particle) {
-                if (!particle || !particle.isAlive) return; 
+                if (!particle || !particle.isAlive) return;
                 const index = this.getCellIndex(particle.x, particle.y);
                 if (this.grid[index]) this.grid[index].push(particle);
             }
@@ -686,10 +836,10 @@
                 if (!particle || !particle.isAlive) return nearby;
                 const pCol = Math.floor(particle.x / this.cellSize);
                 const pRow = Math.floor(particle.y / this.cellSize);
-                for (let dRow = -1; dRow <= 1; dRow++) { 
+                for (let dRow = -1; dRow <= 1; dRow++) {
                     for (let dCol = -1; dCol <= 1; dCol++) {
                         const r = pRow + dRow, c = pCol + dCol;
-                        if (r >= 0 && r < this.rows && c >= 0 && c < this.cols) { 
+                        if (r >= 0 && r < this.rows && c >= 0 && c < this.cols) {
                             const index = r * this.cols + c;
                             if (this.grid[index]) nearby.push(...this.grid[index]);
                         }
@@ -698,195 +848,143 @@
                 return nearby;
             }
         }
-        let spatialGrid; 
+        let spatialGrid;
 
-        class HeavyObject {
-            constructor(x, y, mass, radius) {
-                this.x = x; this.y = y; this.mass = mass; this.radius = radius; 
-                this.color = '#E5E7EB'; 
+        class BlackHole {
+            constructor(x, y, mass, eventHorizonRadius) {
+                this.x = x; this.y = y; this.mass = mass;
+                this.eventHorizonRadius = eventHorizonRadius;
+                this.absorbedParticles = 0;
+                this.lastAbsorbTime = 0;
+                this.pulseIntensity = 0; 
+                this.type = 'blackhole'; 
             }
-            draw() {
-                ctx.beginPath();
-                ctx.arc(this.x, this.y, this.radius, 0, Math.PI * 2);
-                ctx.fillStyle = this.color; ctx.fill();
+            absorb() {
+                this.absorbedParticles++;
+                this.lastAbsorbTime = performance.now();
+                this.pulseIntensity = 1.0;
+                totalAbsorbedByBH++;
+                if(absorbedByBHCountDisplay) absorbedByBHCountDisplay.textContent = totalAbsorbedByBH;
             }
         }
 
-        class Particle {
+        class Particle { 
             constructor(x, y, color, type = 'normal', parentTraits = null) {
-                this.x = x; this.y = y; this.color = color; this.type = type; 
+                this.x = x; this.y = y; this.colorIndex = color; 
+                this.type = type; 
                 this.isAlive = true; this.age = 0;
+
                 this.individualMaxAge = maxParticleAge;
                 this.individualForceFactor = forceFactor;
                 this.individualAbsorptionRadiusFactor = settings.absorptionRadiusFactor;
-                this.ruleModifiers = {}; 
-                this.mass = 1.0; 
-                this.baseRadius = particleRadius; 
-                this.state = 'idle'; 
-                this.stateTicks = 0; 
-                this.targetParticle = null; 
-                this.currentViscosityMultiplier = 1.0; 
-                this.currentForceFactorMultiplier = 1.0; 
-                this.inRadiationZone = false; 
+                this.ruleModifiers = {};
+                this.mass = 1.0;
+                this.baseRadius = particleRadius;
+
+                this.state = 'idle';
+                this.stateTicks = 0;
+                this.targetParticle = null;
+
+                this.currentViscosityMultiplier = 1.0;
+                this.currentForceFactorMultiplier = 1.0;
+                this.inRadiationZone = false;
+
                 this.isPredator = false;
-                this.huntsColor = null; 
+                this.huntsColor = null;
 
                 if (this.type === 'energy') {
-                    this.vx = (Math.random() - 0.5) * 10; this.vy = (Math.random() - 0.5) * 10; 
+                    this.vx = (Math.random() - 0.5) * 10; this.vy = (Math.random() - 0.5) * 10;
                     this.radius = settings.energyParticleRadius; 
-                    this.energyValue = settings.lifeExtensionPerEnergyParticle; 
-                    this.maxAge = settings.energyParticleLifespan; 
-                } else { 
+                    this.energyValue = settings.lifeExtensionPerEnergyParticle;
+                    this.maxAge = settings.energyParticleLifespan;
+                } else {
                     this.vx = (Math.random() - 0.5) * 40; this.vy = (Math.random() - 0.5) * 40;
                     this.radius = this.baseRadius + (Math.random() - 0.5) * (this.baseRadius * 0.25);
 
-                    if (parentTraits) { 
+                    if (parentTraits) {
                         this.individualMaxAge = parentTraits.individualMaxAge;
                         this.individualForceFactor = parentTraits.individualForceFactor;
                         this.individualAbsorptionRadiusFactor = parentTraits.individualAbsorptionRadiusFactor;
-                        this.baseRadius = parentTraits.baseRadius; 
-                        this.mass = parentTraits.mass / Math.max(1, offspringCount); 
-                        this.ruleModifiers = { ...parentTraits.ruleModifiers }; 
+                        this.baseRadius = parentTraits.baseRadius;
+                        this.mass = parentTraits.mass / Math.max(1, offspringCount);
+                        this.ruleModifiers = { ...parentTraits.ruleModifiers };
                         this.isPredator = parentTraits.isPredator;
                         this.huntsColor = parentTraits.huntsColor;
-                        // Note: inRadiationZone is determined dynamically by applyBiomeEffects, not inherited directly for status.
-                        // However, if parent was in radiation and split, the mutation chance for THAT split event uses parent's status.
-                        
-                        let traitMutationRate = mutationChance;
-                        let colorMutationRate = mutationChance;
+                        this.inRadiationZone = parentTraits.inRadiationZone;
 
-                        if (parentTraits.inRadiationZone && settings.enableAbsorptionExplosion) { // Check parent's radiation status at time of split
+                        let traitMutationDynamicChance = mutationChance;
+                        if (this.inRadiationZone && settings.enableAbsorptionExplosion) {
                             const radBiomeEffects = BIOME_SETTINGS.RADIATION_ZONE.effects;
                             if (radBiomeEffects.mutationBoostFactor) {
-                                traitMutationRate = Math.min(1.0, mutationChance * radBiomeEffects.mutationBoostFactor);
-                            }
-                            if (radBiomeEffects.colorMutationBoostFactor) {
-                                colorMutationRate = Math.min(1.0, mutationChance * radBiomeEffects.colorMutationBoostFactor);
+                                traitMutationDynamicChance = Math.min(1.0, mutationChance * radBiomeEffects.mutationBoostFactor);
                             }
                         }
-                        
-                        const MUTATION_STRENGTH_AGE = 50; 
-                        const MUTATION_STRENGTH_FORCE = 100; 
+                        const MUTATION_STRENGTH_AGE = 50;
+                        const MUTATION_STRENGTH_FORCE = 100;
                         const MUTATION_STRENGTH_ABSORPTION = 0.1;
-                        const MUTATION_STRENGTH_RULE = 0.05; 
+                        const MUTATION_STRENGTH_RULE = 0.05;
                         const MUTATION_STRENGTH_BASERADIUS = 0.2;
 
-                        if (Math.random() < traitMutationRate) {
+                        if (Math.random() < traitMutationDynamicChance) {
                             this.individualMaxAge += (Math.random() * 2 - 1) * MUTATION_STRENGTH_AGE;
-                            this.individualMaxAge = Math.max(100, this.individualMaxAge); 
+                            this.individualMaxAge = Math.max(100, this.individualMaxAge);
                         }
-                        if (Math.random() < traitMutationRate) {
+                        if (Math.random() < traitMutationDynamicChance) {
                             this.individualForceFactor += (Math.random() * 2 - 1) * MUTATION_STRENGTH_FORCE;
-                            this.individualForceFactor = Math.max(100, this.individualForceFactor); 
+                            this.individualForceFactor = Math.max(100, this.individualForceFactor);
                         }
-                        if (Math.random() < traitMutationRate) {
+                        if (Math.random() < traitMutationDynamicChance) {
                             this.individualAbsorptionRadiusFactor += (Math.random() * 2 - 1) * MUTATION_STRENGTH_ABSORPTION;
                             this.individualAbsorptionRadiusFactor = Math.max(1.0, this.individualAbsorptionRadiusFactor);
                         }
-                         if (Math.random() < traitMutationRate) {
+                         if (Math.random() < traitMutationDynamicChance) {
                             this.baseRadius += (Math.random() * 2 - 1) * MUTATION_STRENGTH_BASERADIUS;
-                            this.baseRadius = Math.max(0.5, this.baseRadius); 
+                            this.baseRadius = Math.max(0.5, this.baseRadius);
                         }
-                        if (Math.random() < traitMutationRate && numColors > 0) {
+                        if (Math.random() < traitMutationDynamicChance && numColors > 0) {
                             const targetColorToMutate = Math.floor(Math.random() * numColors);
                             const currentModifier = this.ruleModifiers[targetColorToMutate] || 0;
                             this.ruleModifiers[targetColorToMutate] = currentModifier + (Math.random() * 2 - 1) * MUTATION_STRENGTH_RULE;
-                            this.ruleModifiers[targetColorToMutate] = Math.max(-0.5, Math.min(0.5, this.ruleModifiers[targetColorToMutate])); 
+                            this.ruleModifiers[targetColorToMutate] = Math.max(-0.5, Math.min(0.5, this.ruleModifiers[targetColorToMutate]));
                         }
                         if (settings.enablePredatorPrey) {
-                            if (Math.random() < traitMutationRate) { 
-                                this.isPredator = !this.isPredator; 
+                            if (Math.random() < traitMutationDynamicChance) {
+                                this.isPredator = !this.isPredator;
                             }
-                            if (this.isPredator && Math.random() < traitMutationRate && numColors > 1) { 
+                            if (this.isPredator && Math.random() < traitMutationDynamicChance && numColors > 1) {
                                 let newHuntsColor = Math.floor(Math.random() * numColors);
-                                while (newHuntsColor === this.color && numColors > 1) { 
+                                while (newHuntsColor === this.colorIndex && numColors > 1) {
                                     newHuntsColor = Math.floor(Math.random() * numColors);
                                 }
                                 this.huntsColor = newHuntsColor;
                             }
-                            if (!this.isPredator) this.huntsColor = null; 
+                            if (!this.isPredator) this.huntsColor = null;
                         }
-                         // Color mutation uses its specific rate
-                        if (enableColorMutation && Math.random() < colorMutationRate) {
-                            if (numColors > 1) {
-                                let newColor = this.color;
-                                while (newColor === this.color) {
-                                    newColor = Math.floor(Math.random() * numColors);
-                                }
-                                this.color = newColor; // Offspring gets the new color directly
-                            }
-                        }
-
-
-                    } else { 
-                        if (settings.enablePredatorPrey && Math.random() < 0.05 && numColors > 1) { 
+                    } else {
+                        if (settings.enablePredatorPrey && Math.random() < 0.05 && numColors > 1) {
                             this.isPredator = true;
                             this.huntsColor = Math.floor(Math.random() * numColors);
-                            while (this.huntsColor === this.color && numColors > 1) {
+                            while (this.huntsColor === this.colorIndex && numColors > 1) {
                                 this.huntsColor = Math.floor(Math.random() * numColors);
                             }
                         }
                     }
                     this.radius = this.baseRadius * Math.sqrt(this.mass);
-                    this.radius = Math.max(1, this.radius); 
+                    this.radius = Math.max(1, this.radius);
                 }
             }
 
-            draw() { 
-                if (!this.isAlive) return;
-                let fillColor;
-                let currentRadius = this.radius; 
-                let currentShadowBlur = 0;
-                let currentShadowColor = 'transparent';
-
-                if (this.type === 'energy') {
-                    const pulseFactor = 0.8 + Math.sin(this.age * 0.1 + performance.now()*0.001) * 0.2; // Add current time for continuous pulse
-                    currentRadius = settings.energyParticleRadius * pulseFactor; 
-                    fillColor = settings.energyParticleColor; 
-                    if (particleGlow) { 
-                        currentShadowColor = settings.energyParticleColor; 
-                        currentShadowBlur = 6 + Math.sin(this.age * 0.1 + performance.now()*0.001) * 2; // Pulsating glow
-                    }
-                } else { 
-                    fillColor = COLORS[this.color % COLORS.length];
-                    if (particleGlow) {
-                        currentShadowColor = fillColor;
-                        currentShadowBlur = 8;
-                         // If in radiation zone, make glow pulse slightly
-                        if (this.inRadiationZone) {
-                           currentShadowBlur = 8 + Math.sin(performance.now() * 0.005 + this.x * 0.1) * 4;
-                        }
-                    }
-                }
-                ctx.beginPath();
-                ctx.arc(this.x, this.y, currentRadius, 0, Math.PI * 2);
-                ctx.fillStyle = fillColor;
-                ctx.shadowColor = currentShadowColor;
-                ctx.shadowBlur = currentShadowBlur;
-                ctx.fill();
-
-                if (settings.enablePredatorPrey && this.isPredator && this.type === 'normal') {
-                    ctx.strokeStyle = 'rgba(255,50,50,0.8)'; 
-                    ctx.lineWidth = Math.max(0.5, 2 / camera.zoom); 
-                    ctx.stroke(); 
-                }
-
-                if (currentShadowBlur > 0) { 
-                    ctx.shadowColor = 'transparent';
-                    ctx.shadowBlur = 0;
-                }
-            }
             explode() { 
                 if (this.type !== 'normal' || !this.isAlive) return [];
-                this.isAlive = false; 
+                this.isAlive = false;
                 let createdEnergyParticles = [];
                 const numToSpawn = settings.energyParticlesPerExplosion;
                 for (let i = 0; i < numToSpawn; i++) {
                     if (particles.length + createdEnergyParticles.length >= MAX_TOTAL_PARTICLES) break;
                     const angle = Math.random() * Math.PI * 2;
-                    const speed = (Math.random() * 0.5 + 0.5) * 25; 
+                    const speed = (Math.random() * 0.5 + 0.5) * 25;
                     const ep = new Particle(this.x, this.y, 0, 'energy'); 
-                    ep.vx = this.vx * 0.1 + Math.cos(angle) * speed; 
+                    ep.vx = this.vx * 0.1 + Math.cos(angle) * speed;
                     ep.vy = this.vy * 0.1 + Math.sin(angle) * speed;
                     createdEnergyParticles.push(ep);
                 }
@@ -894,70 +992,86 @@
             }
             absorb(energyParticle) { 
                 if (this.type !== 'normal' || energyParticle.type !== 'energy' || !this.isAlive || !energyParticle.isAlive) return;
-                this.age = Math.max(0, this.age - energyParticle.energyValue); 
+                this.age = Math.max(0, this.age - energyParticle.energyValue);
                 energyParticle.isAlive = false;
-                if (settings.enableAbsorptionExplosion) { 
+                if (settings.enableAbsorptionExplosion) {
                     this.mass += settings.massGainPerEnergy;
-                    this.mass = Math.min(this.mass, settings.maxParticleMass); 
-                    this.radius = this.baseRadius * Math.sqrt(this.mass);
-                    this.radius = Math.max(1, this.radius); 
+                    this.mass = Math.min(this.mass, settings.maxParticleMass);
+                    this.radius = this.baseRadius * Math.sqrt(this.mass); 
+                    this.radius = Math.max(1, this.radius);
                 }
             }
             split() { 
                 let newOffspring = [];
-                const actualOffspringCount = Math.max(1, offspringCount); 
+                const actualOffspringCount = Math.max(1, offspringCount);
                 const parentTraitsForOffspring = {
                     individualMaxAge: this.individualMaxAge,
                     individualForceFactor: this.individualForceFactor,
                     individualAbsorptionRadiusFactor: this.individualAbsorptionRadiusFactor,
-                    mass: this.mass, 
+                    mass: this.mass,
                     ruleModifiers: this.ruleModifiers,
                     baseRadius: this.baseRadius,
                     isPredator: this.isPredator,
                     huntsColor: this.huntsColor,
-                    inRadiationZone: this.inRadiationZone // Pass current radiation status for mutation check during split
+                    inRadiationZone: this.inRadiationZone
                 };
                 for (let i = 0; i < actualOffspringCount; i++) {
                     if (particles.length + newOffspring.length >= MAX_TOTAL_PARTICLES) break;
                     const offspringX = this.x + (Math.random() - 0.5) * this.radius * 4;
                     const offspringY = this.y + (Math.random() - 0.5) * this.radius * 4;
-                    
-                    // Color is handled by constructor based on parentTraits.inRadiationZone
+
+                    let offspringColorIndex = this.colorIndex;
+                    let colorMutDynamicChance = mutationChance;
+                     if (this.inRadiationZone && settings.enableAbsorptionExplosion) {
+                        const radBiomeEffects = BIOME_SETTINGS.RADIATION_ZONE.effects;
+                         if (radBiomeEffects.colorMutationBoostFactor) {
+                            colorMutDynamicChance = Math.min(1.0, mutationChance * radBiomeEffects.colorMutationBoostFactor);
+                        }
+                    }
+
+                    if (enableColorMutation && Math.random() < colorMutDynamicChance) {
+                        if (numColors > 1) {
+                            let newColorIndex = this.colorIndex;
+                            while (newColorIndex === this.colorIndex) {
+                                newColorIndex = Math.floor(Math.random() * numColors);
+                            }
+                            offspringColorIndex = newColorIndex;
+                        }
+                    }
                     const offspring = new Particle(
-                        offspringX, offspringY, this.color, 'normal', parentTraitsForOffspring 
+                        offspringX, offspringY, offspringColorIndex, 'normal', parentTraitsForOffspring
                     );
-                    offspring.vx = this.vx * offspringVelocityBoost * (Math.random() * 0.4 + 0.8); 
+                    offspring.vx = this.vx * offspringVelocityBoost * (Math.random() * 0.4 + 0.8);
                     offspring.vy = this.vy * offspringVelocityBoost * (Math.random() * 0.4 + 0.8);
                     newOffspring.push(offspring);
                 }
-                this.isAlive = false; 
+                this.isAlive = false;
                 return newOffspring;
             }
-            
-            applyBiomeEffects() {
-                this.currentViscosityMultiplier = 1.0; 
-                this.currentForceFactorMultiplier = 1.0; 
-                this.inRadiationZone = false; 
+            applyBiomeEffects() { 
+                this.currentViscosityMultiplier = 1.0;
+                this.currentForceFactorMultiplier = 1.0;
+                this.inRadiationZone = false;
 
                 if (!enableBiomes || this.type === 'energy' || !noiseGenerator) {
                     return;
                 }
 
                 const noiseVal = noiseGenerator.octaveNoise(this.x / noiseScale, this.y / noiseScale, noiseOctaves, noisePersistence);
-                let activeBiome = BIOME_SETTINGS.DEFAULT_SPACE; 
+                let activeBiome = BIOME_SETTINGS.DEFAULT_SPACE;
 
                 for (const biomeKey in BIOME_SETTINGS) {
                     if (biomeKey === 'DEFAULT_SPACE') continue;
                     const biome = BIOME_SETTINGS[biomeKey];
                     const matchesMin = biome.thresholdMin === undefined || noiseVal >= biome.thresholdMin;
-                    const matchesMax = biome.thresholdMax === undefined || noiseVal < biome.thresholdMax; 
+                    const matchesMax = biome.thresholdMax === undefined || noiseVal < biome.thresholdMax;
 
                     if (matchesMin && matchesMax) {
                         activeBiome = biome;
                         break;
                     }
                 }
-                
+
                 if (activeBiome.effects) {
                     if (activeBiome.effects.viscosityMultiplier !== undefined) {
                         this.currentViscosityMultiplier = typeof activeBiome.effects.viscosityMultiplier === 'function' ?
@@ -967,27 +1081,29 @@
                         this.currentForceFactorMultiplier = typeof activeBiome.effects.forceFactorMultiplier === 'function' ?
                             activeBiome.effects.forceFactorMultiplier(noiseVal) : activeBiome.effects.forceFactorMultiplier;
                     }
-                    if (activeBiome.label === "Radiation Zone") { 
-                        this.inRadiationZone = true;
-                        if (settings.enableAbsorptionExplosion && activeBiome.effects.agePenalty) {
-                            this.age += activeBiome.effects.agePenalty;
-                        }
+                    if (activeBiome.label === "Radiation Zone") {
+                         this.inRadiationZone = true;
+                         if (settings.enableAbsorptionExplosion && activeBiome.effects.agePenalty) {
+                             this.age += activeBiome.effects.agePenalty;
+                         }
                     }
                 }
             }
+            executeBehavior(dt, allParticles) { 
+                 if (!this.isAlive || this.type !== 'normal' ) return;
 
-            executeBehavior(dt, nearbyParticles) { // Changed allParticles to nearbyParticles
-                if (!this.isAlive || this.type !== 'normal' ) return; 
-                
                 const AI_SEEK_FORCE = settings.AI_SEEK_FORCE_MULTIPLIER * this.individualForceFactor;
-                const AI_SIGHT_RADIUS = maxDist * settings.AI_SIGHT_RADIUS_MULTIPLIER; 
+                const AI_SIGHT_RADIUS = maxDist * settings.AI_SIGHT_RADIUS_MULTIPLIER;
+                const nearbyParticlesToSearch = spatialGrid ? spatialGrid.getNearbyParticles(this) : allParticles;
 
-                if (this.state === 'seeking_energy' && settings.enableAbsorptionExplosion) { 
+
+                if (this.state === 'seeking_energy' && settings.enableAbsorptionExplosion) {
                     if (!this.targetParticle || !this.targetParticle.isAlive) {
                         let closestEnergy = null;
                         let minDistSq = AI_SIGHT_RADIUS * AI_SIGHT_RADIUS;
-                        for (const p of nearbyParticles) { // Use nearbyParticles
-                            if (p.isAlive && p.type === 'energy' && p !== this) {
+                        for (const p of nearbyParticlesToSearch) {
+                            if (p === this || !p.isAlive) continue;
+                            if (p.type === 'energy') {
                                 const dx = p.x - this.x; const dy = p.y - this.y;
                                 const dSq = dx * dx + dy * dy;
                                 if (dSq < minDistSq) { minDistSq = dSq; closestEnergy = p; }
@@ -999,68 +1115,82 @@
                     if (this.targetParticle && this.targetParticle.isAlive) {
                         const dx = this.targetParticle.x - this.x; const dy = this.targetParticle.y - this.y;
                         const dist = Math.sqrt(dx * dx + dy * dy);
-                        if (dist > 0.1) { 
-                            const moveX = (dx / dist) * AI_SEEK_FORCE / this.mass; 
+                        if (dist > 0.1) {
+                            const moveX = (dx / dist) * AI_SEEK_FORCE / this.mass;
                             const moveY = (dy / dist) * AI_SEEK_FORCE / this.mass;
                             this.vx += moveX * dt * simulationSpeed; this.vy += moveY * dt * simulationSpeed;
                         }
                     } else { this.state = 'was_seeking'; this.targetParticle = null; this.stateTicks = 0; }
-                } else if (this.state === 'fleeing' && settings.enableAbsorptionExplosion) { 
-                    if (this.targetParticle && this.targetParticle.isAlive) { 
+                } else if (this.state === 'fleeing' && settings.enableAbsorptionExplosion) {
+                    if (this.targetParticle && this.targetParticle.isAlive) {
                         const dx = this.x - this.targetParticle.x; const dy = this.y - this.targetParticle.y;
                         const dist = Math.sqrt(dx * dx + dy * dy);
-                        if (dist > 0.1 && dist < AI_SIGHT_RADIUS) { 
+                        if (dist > 0.1 && dist < AI_SIGHT_RADIUS) {
                             const moveX = (dx / dist) * AI_SEEK_FORCE / this.mass;
                             const moveY = (dy / dist) * AI_SEEK_FORCE / this.mass;
                             this.vx += moveX * dt * simulationSpeed; this.vy += moveY * dt * simulationSpeed;
                         } else { this.state = 'was_fleeing'; this.targetParticle = null; this.stateTicks = 0; }
                     } else { this.state = 'idle'; this.targetParticle = null; this.stateTicks = 0; }
                 } else if (this.state === 'hunting' && settings.enablePredatorPrey) {
-                     if (!this.targetParticle || !this.targetParticle.isAlive || this.targetParticle.color !== this.huntsColor) {
+                     if (!this.targetParticle || !this.targetParticle.isAlive || this.targetParticle.colorIndex !== this.huntsColor) {
                         let closestPrey = null;
                         let minDistSq = AI_SIGHT_RADIUS * AI_SIGHT_RADIUS;
-                        for (const p of nearbyParticles) { // Use nearbyParticles
-                            if (p.isAlive && p.type === 'normal' && p.color === this.huntsColor && p !== this && !p.isPredator) {
-                                const dx = p.x - this.x; const dy = p.y - this.y;
+                        for (const p of nearbyParticlesToSearch) {
+                            if (p === this || !p.isAlive) continue;
+                            if (p.type === 'normal' && p.colorIndex === this.huntsColor && !p.isPredator) {
+                                const dx = p.x - this.x;
+                                const dy = p.y - this.y;
                                 const dSq = dx * dx + dy * dy;
-                                if (dSq < minDistSq) { minDistSq = dSq; closestPrey = p; }
+                                if (dSq < minDistSq) {
+                                    minDistSq = dSq;
+                                    closestPrey = p;
+                                }
                             }
                         }
                         this.targetParticle = closestPrey;
-                        if (!this.targetParticle) { this.state = 'idle'; this.stateTicks = 0;}
+                        if (!this.targetParticle) {
+                            this.state = 'idle';
+                            this.stateTicks = 0;
+                        }
                     }
                     if (this.targetParticle && this.targetParticle.isAlive) {
-                        const dx = this.targetParticle.x - this.x; const dy = this.targetParticle.y - this.y;
+                        const dx = this.targetParticle.x - this.x;
+                        const dy = this.targetParticle.y - this.y;
                         const dist = Math.sqrt(dx * dx + dy * dy);
-                        if (dist > this.radius + this.targetParticle.radius) { 
+                        if (dist > this.radius + this.targetParticle.radius) {
                             const moveX = (dx / dist) * AI_SEEK_FORCE / this.mass;
                             const moveY = (dy / dist) * AI_SEEK_FORCE / this.mass;
-                            this.vx += moveX * dt * simulationSpeed; this.vy += moveY * dt * simulationSpeed;
+                            this.vx += moveX * dt * simulationSpeed;
+                            this.vy += moveY * dt * simulationSpeed;
                         }
-                    } else { this.state = 'was_hunting'; this.targetParticle = null; this.stateTicks = 0; }
+                    } else {
+                        this.state = 'was_hunting';
+                        this.targetParticle = null;
+                        this.stateTicks = 0;
+                    }
                 }
             }
-            update(dt, nearbyParticlesForAI) { // Pass nearbyParticles for AI
+            update(dt, allParticles) { 
                 if (!this.isAlive) return { newParticlesFromSplit: null, shouldExplode: false };
-                if (this.type === 'normal') { this.applyBiomeEffects(); } 
+                if (this.type === 'normal') { this.applyBiomeEffects(); }
                 this.age++;
                 let newParticlesFromSplit = null;
                 let shouldExplodeFlag = false;
 
                 if (this.type === 'normal') {
                     this.stateTicks++;
-                    if (settings.enableAbsorptionExplosion) { 
+                    if (settings.enableAbsorptionExplosion) {
                         if (this.age > this.individualMaxAge * settings.ENERGY_SEEK_THRESHOLD_AGE_FACTOR &&
                             this.state !== 'seeking_energy' && this.state !== 'fleeing' && this.state !== 'hunting' &&
                             (this.state !== 'was_seeking' || this.stateTicks > settings.SEEK_COOLDOWN)) {
                             this.state = 'seeking_energy'; this.targetParticle = null; this.stateTicks = 0;
                         } else if (this.state === 'seeking_energy' && this.targetParticle && !this.targetParticle.isAlive) {
                             this.state = 'was_seeking'; this.targetParticle = null; this.stateTicks = 0;
-                        } else if (this.state === 'seeking_energy' && this.age < this.individualMaxAge * 0.3) { 
+                        } else if (this.state === 'seeking_energy' && this.age < this.individualMaxAge * 0.3) {
                             this.state = 'idle'; this.targetParticle = null; this.stateTicks = 0;
                         } else if ((this.state === 'was_seeking' && this.stateTicks > settings.SEEK_COOLDOWN) ||
                                    (this.state === 'was_fleeing' && this.stateTicks > settings.FLEE_COOLDOWN) ||
-                                   (this.state === 'was_hunting' && this.stateTicks > settings.HUNTING_COOLDOWN) 
+                                   (this.state === 'was_hunting' && this.stateTicks > settings.HUNTING_COOLDOWN)
                                   ) {
                             this.state = 'idle'; this.stateTicks = 0;
                         }
@@ -1069,32 +1199,34 @@
                         (this.state === 'idle' || (this.state === 'was_hunting' && this.stateTicks > settings.HUNTING_COOLDOWN)) &&
                         this.state !== 'fleeing' && this.state !== 'seeking_energy'
                         ) {
-                        this.state = 'hunting'; this.targetParticle = null; this.stateTicks = 0;
+                        this.state = 'hunting';
+                        this.targetParticle = null;
+                        this.stateTicks = 0;
                     }
 
-                    this.executeBehavior(dt, nearbyParticlesForAI); // Pass relevant nearby particles
+                    this.executeBehavior(dt, allParticles);
                     if (enableSplitting && this.age >= this.individualMaxAge * reproductionAgeFactor && this.age < this.individualMaxAge) {
                         if (Math.random() < reproductionChance) {
-                            newParticlesFromSplit = this.split(); 
-                            return { newParticlesFromSplit, shouldExplode: false }; 
+                            newParticlesFromSplit = this.split();
+                            return { newParticlesFromSplit, shouldExplode: false };
                         }
                     }
-                    if (enableAgeDeath && this.age > this.individualMaxAge) { 
-                        if (settings.enableAbsorptionExplosion) { 
-                            shouldExplodeFlag = true; 
-                        } else { 
-                            this.isAlive = false; 
+                    if (enableAgeDeath && this.age > this.individualMaxAge) {
+                        if (settings.enableAbsorptionExplosion) {
+                            shouldExplodeFlag = true;
+                        } else {
+                            this.isAlive = false;
                         }
                     }
-                } else if (this.type === 'energy') { 
-                    if (this.age > this.maxAge) { 
+                } else if (this.type === 'energy') {
+                    if (this.age > this.maxAge) {
                         this.isAlive = false;
                     }
                 }
                 const currentEffectiveViscosity = this.type === 'normal' ? (viscosity * this.currentViscosityMultiplier) : viscosity;
                 this.vx *= (1 - currentEffectiveViscosity); this.vy *= (1 - currentEffectiveViscosity);
                 this.x += this.vx * dt * simulationSpeed; this.y += this.vy * dt * simulationSpeed;
-                const bounceFactor = -0.7; 
+                const bounceFactor = -0.7;
                 const worldLeft = 0, worldRight = WORLD_WIDTH, worldTop = 0, worldBottom = WORLD_HEIGHT;
                 switch (boundaryCondition) {
                     case 'bounce':
@@ -1104,12 +1236,12 @@
                         if (this.y > worldBottom - this.radius) { this.y = worldBottom - this.radius; this.vy *= bounceFactor; }
                         break;
                     case 'wrap':
-                        if (this.x < worldLeft - this.radius) this.x = worldRight + this.radius; 
+                        if (this.x < worldLeft - this.radius) this.x = worldRight + this.radius;
                         else if (this.x > worldRight + this.radius) this.x = worldLeft - this.radius;
                         if (this.y < worldTop - this.radius) this.y = worldBottom + this.radius;
                         else if (this.y > worldBottom + this.radius) this.y = worldTop - this.radius;
                         break;
-                    case 'absorb': 
+                    case 'absorb':
                         if (this.x < worldLeft - this.radius*2 || this.x > worldRight + this.radius*2 ||
                             this.y < worldTop - this.radius*2 || this.y > worldBottom + this.radius*2) {
                             this.isAlive = false;
@@ -1123,21 +1255,21 @@
                 const dx = otherParticle.x - this.x; const dy = otherParticle.y - this.y;
                 const distSq = dx * dx + dy * dy;
                 const r1 = this.radius > 0 ? this.radius : 1; const r2 = otherParticle.radius > 0 ? otherParticle.radius : 1;
-                const effectiveMaxDist = maxDist + r1 + r2; 
-                if (distSq > 0.0001 && distSq < effectiveMaxDist * effectiveMaxDist) { 
+                const effectiveMaxDist = maxDist + r1 + r2;
+                if (distSq > 0.0001 && distSq < effectiveMaxDist * effectiveMaxDist) {
                     const dist = Math.sqrt(distSq);
-                    let accelerationStrength; let currentRuleValue = ruleValue; 
-                    if (this.ruleModifiers[otherParticle.color] !== undefined) {
-                        currentRuleValue += this.ruleModifiers[otherParticle.color];
+                    let accelerationStrength; let currentRuleValue = ruleValue;
+                    if (this.ruleModifiers[otherParticle.colorIndex] !== undefined) {
+                        currentRuleValue += this.ruleModifiers[otherParticle.colorIndex];
                     }
-                    currentRuleValue = Math.max(-1.0, Math.min(1.0, currentRuleValue)); 
-                    const effectiveForceFactor = this.individualForceFactor * this.currentForceFactorMultiplier; 
+                    currentRuleValue = Math.max(-1.0, Math.min(1.0, currentRuleValue));
+                    const effectiveForceFactor = this.individualForceFactor * this.currentForceFactorMultiplier;
                     switch (forceModel) {
                         case 'lennardJones':
                             const r0 = ljEquilibriumDistance > 0 ? ljEquilibriumDistance : 1;
-                            if (dist < 0.1 * r0) { 
+                            if (dist < 0.1 * r0) {
                                 accelerationStrength = currentRuleValue * effectiveForceFactor * (Math.pow(r0 / (0.1*r0), 13));
-                                if (currentRuleValue < 0 ) accelerationStrength *= -1; 
+                                if (currentRuleValue < 0 ) accelerationStrength *= -1;
                             } else {
                                 const term_repulsive = Math.pow(r0 / dist, 13);
                                 const term_attractive = Math.pow(r0 / dist, 7);
@@ -1149,16 +1281,16 @@
                             accelerationStrength = currentRuleValue * effectiveForceFactor;
                             if (dist > 1) { accelerationStrength /= dist; } break;
                     }
-                    let ax = (accelerationStrength * dx / dist) / this.mass; 
-                    let ay = (accelerationStrength * dy / dist) / this.mass; 
+                    let ax = (accelerationStrength * dx / dist) / this.mass;
+                    let ay = (accelerationStrength * dy / dist) / this.mass;
                     const totalAccelerationMag = Math.sqrt(ax * ax + ay * ay);
-                    if (totalAccelerationMag > maxForce) { 
+                    if (totalAccelerationMag > maxForce) {
                         const scale = maxForce / totalAccelerationMag; ax *= scale; ay *= scale;
                     }
                     this.vx += ax * dt * simulationSpeed; this.vy += ay * dt * simulationSpeed;
-                    if (settings.enableAbsorptionExplosion && this.type === 'normal' && otherParticle.type === 'normal') { 
-                        if (currentRuleValue < settings.DANGER_THRESHOLD && 
-                            this.state !== 'fleeing' && 
+                    if (settings.enableAbsorptionExplosion && this.type === 'normal' && otherParticle.type === 'normal') {
+                        if (currentRuleValue < settings.DANGER_THRESHOLD &&
+                            this.state !== 'fleeing' &&
                             (this.state !== 'was_fleeing' || this.stateTicks > settings.FLEE_COOLDOWN)) {
                             this.state = 'fleeing'; this.targetParticle = otherParticle; this.stateTicks = 0;
                         }
@@ -1167,81 +1299,145 @@
             }
         }
 
-function toggleFullScreen() {
-    const controlPanel = document.querySelector('.control-panel');
-    const fullscreenBtn = document.getElementById('fullscreenBtn');
-    if (!document.fullscreenElement) {
-        document.documentElement.requestFullscreen().catch(err => {
-            showToast(`Error enabling full-screen: ${err.message}`);
-        });
-        if (fullscreenBtn) fullscreenBtn.textContent = 'Exit Fullscreen';
-        if (controlPanel && !controlPanel.classList.contains('hidden')) {
-            controlPanel.classList.add('hidden');
-            controlPanel.dataset.hiddenByFullscreen = 'true'; 
-        }
-    } else {
-        if (document.exitFullscreen) {
-            document.exitFullscreen();
-            if (fullscreenBtn) fullscreenBtn.textContent = 'Fullscreen';
-            if (controlPanel && controlPanel.dataset.hiddenByFullscreen === 'true' && !controlPanel.dataset.hiddenByKey) {
-                controlPanel.classList.remove('hidden');
+
+        // --- WebGL Helper Functions ---
+        function createShader(gl, type, source) {
+            const shader = gl.createShader(type);
+            gl.shaderSource(shader, source);
+            gl.compileShader(shader);
+            if (!gl.getShaderParameter(shader, gl.COMPILE_STATUS)) {
+                console.error('Error compiling shader:', gl.getShaderInfoLog(shader));
+                gl.deleteShader(shader);
+                return null;
             }
-            if (controlPanel) controlPanel.removeAttribute('data-hidden-by-fullscreen');
+            return shader;
         }
-    }
-    setTimeout(resizeCanvas, 150); 
-}
 
-function toggleSidebarVisibility() {
-    const controlPanel = document.querySelector('.control-panel');
-    if (controlPanel) {
-        const isHidden = controlPanel.classList.contains('hidden');
-        if (isHidden) {
-            controlPanel.classList.remove('hidden');
-            controlPanel.removeAttribute('data-hidden-by-key'); 
-             if(document.fullscreenElement) controlPanel.dataset.hiddenByFullscreen = 'false';
-            showToast("Sidebar Shown");
-        } else {
-            controlPanel.classList.add('hidden');
-            controlPanel.setAttribute('data-hidden-by-key', 'true'); 
-            showToast("Sidebar Hidden (Press 'h' to show)");
+        function createProgram(gl, vertexShader, fragmentShader) {
+            const program = gl.createProgram();
+            gl.attachShader(program, vertexShader);
+            gl.attachShader(program, fragmentShader);
+            gl.linkProgram(program);
+            if (!gl.getProgramParameter(program, gl.LINK_STATUS)) {
+                console.error('Error linking program:', gl.getProgramInfoLog(program));
+                gl.deleteProgram(program);
+                return null;
+            }
+            return program;
         }
-        setTimeout(resizeCanvas, 50); 
-    }
-}
 
-function startAnimationLoop() { 
-    if (animationFrameId === null) { 
-        lastFrameTime = performance.now(); 
-        animationFrameId = requestAnimationFrame(animationLoop);
-    }
-}
-function stopAnimationLoop() { 
-     if (animationFrameId !== null) {
-        cancelAnimationFrame(animationFrameId);
-        animationFrameId = null;
-    }
-}
-        // --- Offscreen Canvas for Noise Biome Texture ---
-        function initializeOffscreenNoiseCanvas() {
+        function initializeWebGLShadersAndPrograms() {
+            if (!gl) return;
+            // Particle Shader Program
+            const pVertexShader = createShader(gl, gl.VERTEX_SHADER, particleVertexShaderSource);
+            const pFragmentShader = createShader(gl, gl.FRAGMENT_SHADER, particleFragmentShaderSource);
+            particleShaderProgram = createProgram(gl, pVertexShader, pFragmentShader);
+
+            particlePositionLocation = gl.getAttribLocation(particleShaderProgram, 'a_position');
+            particleColorLocation = gl.getAttribLocation(particleShaderProgram, 'a_color');
+            particleSizeLocation = gl.getAttribLocation(particleShaderProgram, 'a_size');
+            particleTypeLocation = gl.getAttribLocation(particleShaderProgram, 'a_type');
+            particleResolutionLocation = gl.getUniformLocation(particleShaderProgram, 'u_resolution');
+            particleCameraLocation = gl.getUniformLocation(particleShaderProgram, 'u_camera');
+            particleGlowLocation = gl.getUniformLocation(particleShaderProgram, 'u_particleGlow');
+            particleTimeLocation = gl.getUniformLocation(particleShaderProgram, 'u_time');
+
+
+            // Background Shader Program
+            const bgVertexShader = createShader(gl, gl.VERTEX_SHADER, backgroundVertexShaderSource);
+            const bgFragmentShader = createShader(gl, gl.FRAGMENT_SHADER, backgroundFragmentShaderSource);
+            backgroundShaderProgram = createProgram(gl, bgVertexShader, bgFragmentShader);
+
+            backgroundPositionLocation = gl.getAttribLocation(backgroundShaderProgram, 'a_position');
+            backgroundTextureLocation = gl.getUniformLocation(backgroundShaderProgram, 'u_texture');
+            // backgroundShowTrailsLocation uniform and its usage are removed
+
+
+            // Create buffers
+            particlePositionBuffer = gl.createBuffer();
+            particleColorBuffer = gl.createBuffer();
+            particleSizeBuffer = gl.createBuffer();
+            particleTypeBuffer = gl.createBuffer();
+
+            backgroundPositionBuffer = gl.createBuffer();
+            gl.bindBuffer(gl.ARRAY_BUFFER, backgroundPositionBuffer);
+            const positions = [-1, -1, 1, -1, -1, 1, -1, 1, 1, -1, 1, 1]; 
+            gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(positions), gl.STATIC_DRAW);
+
+            biomeTexture = gl.createTexture();
+            gl.bindTexture(gl.TEXTURE_2D, biomeTexture);
+            gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+            gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+            gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR); 
+            gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+        }
+
+
+        // --- Simulation Core Functions ---
+        function toggleFullScreen() { 
+            if (!document.fullscreenElement) {
+                document.documentElement.requestFullscreen().catch(err => {
+                    alert(`Error attempting to enable full-screen mode: ${err.message} (${err.name})`);
+                });
+            } else {
+                if (document.exitFullscreen) {
+                    document.exitFullscreen();
+                }
+            }
+        }
+        function toggleSidebarVisibility() { 
+            const controlPanel = document.querySelector('.control-panel');
+            if (controlPanel) {
+                const isHiddenByHKey = controlPanel.classList.contains('hidden-by-h-key');
+
+                if (isHiddenByHKey) {
+                    controlPanel.classList.remove('hidden-by-h-key');
+                    controlPanel.classList.remove('minimized-for-fullscreen');
+                    controlPanel.classList.remove('fully-expanded-in-fullscreen');
+                    controlPanel.removeAttribute('data-minimized-by-fullscreen');
+                    showToast("Sidebar Shown");
+                } else {
+                    controlPanel.classList.add('hidden-by-h-key');
+                    controlPanel.classList.remove('minimized-for-fullscreen');
+                    controlPanel.classList.remove('fully-expanded-in-fullscreen');
+                    controlPanel.removeAttribute('data-minimized-by-fullscreen');
+                    showToast("Sidebar Hidden (Press 'h' to show)");
+                }
+                setTimeout(resizeCanvas, 50); 
+            }
+        }
+        function startAnimationLoop() {
+            if (animationFrameId === null && gl) { 
+                lastFrameTime = performance.now();
+                animationFrameId = requestAnimationFrame(animationLoop);
+            }
+        }
+        function stopAnimationLoop() {
+             if (animationFrameId !== null) {
+                cancelAnimationFrame(animationFrameId);
+                animationFrameId = null;
+            }
+        }
+
+        function initializeOffscreenNoiseCanvas() { 
             if (!offscreenNoiseCanvas) {
                 offscreenNoiseCanvas = document.createElement('canvas');
-                offscreenNoiseCtx = offscreenNoiseCanvas.getContext('2d', {willReadFrequently: true}); // willReadFrequently can be an optimization hint
+                offscreenNoiseCtx = offscreenNoiseCanvas.getContext('2d');
             }
-            // Resize if necessary, and flag for update
             if (offscreenNoiseCanvas.width !== WORLD_WIDTH || offscreenNoiseCanvas.height !== WORLD_HEIGHT) {
                 offscreenNoiseCanvas.width = WORLD_WIDTH;
                 offscreenNoiseCanvas.height = WORLD_HEIGHT;
-                worldNoiseNeedsUpdate = true; // Force re-render if size changes
+                worldNoiseNeedsUpdate = true;
             }
         }
+        function updateWorldNoiseTexture() { 
+            if (!enableBiomes || !noiseGenerator || !offscreenNoiseCtx || !gl) return;
+            initializeOffscreenNoiseCanvas(); 
 
-        function updateWorldNoiseTexture() {
-            if (!enableBiomes || !noiseGenerator || !offscreenNoiseCtx) return;
-            // console.log("Rendering full world noise texture..."); // For debugging
             const imageData = offscreenNoiseCtx.createImageData(WORLD_WIDTH, WORLD_HEIGHT);
             const data = imageData.data;
-            // const time = performance.now(); // Only use time if colorFn is designed for static patterns based on a "bake time"
+            const time = performance.now();
+            const secondaryNoiseFn = (x,y) => noiseGenerator.noise(x,y);
 
             for (let wy = 0; wy < WORLD_HEIGHT; wy++) {
                 for (let wx = 0; wx < WORLD_WIDTH; wx++) {
@@ -1258,61 +1454,70 @@ function stopAnimationLoop() {
                             break;
                         }
                     }
-                    
-                    const colorObj = activeBiome.colorFn(noiseVal, wx, wy); // Pass wx, wy for potential patterns
+                    const colorData = activeBiome.colorFn(noiseVal, time, wx, wy, secondaryNoiseFn);
                     const idx = (wy * WORLD_WIDTH + wx) * 4;
-                    data[idx] = colorObj.r;
-                    data[idx + 1] = colorObj.g;
-                    data[idx + 2] = colorObj.b;
-                    data[idx + 3] = colorObj.a;
+                    data[idx] = colorData.r; data[idx+1] = colorData.g; data[idx+2] = colorData.b; data[idx+3] = colorData.a;
                 }
             }
             offscreenNoiseCtx.putImageData(imageData, 0, 0);
-            worldNoiseNeedsUpdate = false; // Texture is now up-to-date
-            // console.log("Full world noise texture rendered."); // For debugging
+
+            gl.bindTexture(gl.TEXTURE_2D, biomeTexture);
+            gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, offscreenNoiseCanvas);
+            worldNoiseNeedsUpdate = false;
         }
 
-
-        function initializeBiomes() { 
+        function initializeBiomes() {
             if (enableBiomes) {
-                if (!noiseGenerator) { 
+                if (!noiseGenerator) {
                     noiseGenerator = new PerlinNoise(noiseSeed);
                 } else {
-                    noiseGenerator.seed(noiseSeed); 
+                    noiseGenerator.seed(noiseSeed);
                 }
-                worldNoiseNeedsUpdate = true; // Flag that the offscreen texture needs to be redrawn
+                worldNoiseNeedsUpdate = true; 
                 showToast("Noise-based biomes initialized.");
             } else {
                 showToast("Biomes Disabled.");
             }
-            updateConditionalControls(); 
+            updateConditionalControls();
         }
 
-        function generateColors(count) { 
-            COLORS = [];
-            for (let i = 0; i < count; i++) {
-                const hue = (i * 360 / count) % 360; 
-                COLORS.push(`hsl(${hue}, 100%, 70%)`); 
-            }
-            updateColorPicker(); 
+        function hslToRgb(h, s, l) {
+            s /= 100; l /= 100;
+            const k = n => (n + h / 30) % 12;
+            const a = s * Math.min(l, 1 - l);
+            const f = n =>
+                l - a * Math.max(-1, Math.min(k(n) - 3, Math.min(9 - k(n), 1)));
+            return [f(0), f(8), f(4)];
         }
+
+        function generateColors(count) {
+            COLORS_HSL = [];
+            COLORS_RGB = [];
+            for (let i = 0; i < count; i++) {
+                const hue = (i * 360 / count) % 360;
+                COLORS_HSL.push(`hsl(${hue}, 100%, 70%)`);
+                COLORS_RGB.push(hslToRgb(hue, 100, 70));
+            }
+            updateColorPicker();
+        }
+
         function initializeRules() { 
             rules = [];
             for (let i = 0; i < numColors; i++) {
                 rules[i] = [];
                 for (let j = 0; j < numColors; j++) {
-                    rules[i][j] = (Math.random() * 2 - 1) * 0.2; 
+                    rules[i][j] = (Math.random() * 2 - 1) * 0.2;
                 }
             }
-            buildRuleEditor(); 
+            buildRuleEditor();
         }
-        function createParticles() { 
+        function createParticles() {
             particles = [];
-            for (let i = 0; i < numParticles; i++) { 
-                const x = Math.random() * WORLD_WIDTH; 
+            for (let i = 0; i < numParticles; i++) {
+                const x = Math.random() * WORLD_WIDTH;
                 const y = Math.random() * WORLD_HEIGHT;
-                const color = Math.floor(Math.random() * numColors); 
-                particles.push(new Particle(x, y, color, 'normal')); 
+                const color = Math.floor(Math.random() * numColors);
+                particles.push(new Particle(x, y, color, 'normal'));
             }
             if(particleCountDisplay) particleCountDisplay.textContent = particles.length;
         }
@@ -1322,112 +1527,120 @@ function stopAnimationLoop() {
             for (let i = 0; i < numGravityWells; i++) {
                 const x = Math.random() * WORLD_WIDTH;
                 const y = Math.random() * WORLD_HEIGHT;
-                heavyObjects.push(new HeavyObject(x, y, gravityWellMass, gravityWellRadius));
+                heavyObjects.push(new BlackHole(x, y, gravityWellMass, gravityWellRadius));
             }
+            totalAbsorbedByBH = 0;
+            if(absorbedByBHCountDisplay) absorbedByBHCountDisplay.textContent = totalAbsorbedByBH;
         }
         function updateConditionalControls() { 
             const getEl = id => document.getElementById(id);
             const setHidden = (el, hide) => el ? (hide ? el.classList.add('hidden') : el.classList.remove('hidden')) : null;
-            
+
             setHidden(getEl('ljParamsContainer'), forceModel !== 'lennardJones');
             setHidden(getEl('ageParamsContainer'), !enableAgeDeath);
             setHidden(getEl('splittingParamsContainer'), !enableSplitting);
-            setHidden(getEl('mutationParamsContainer'), !(enableSplitting && (enableColorMutation || mutationChance > 0))); 
+            setHidden(getEl('mutationParamsContainer'), !(enableSplitting && (enableColorMutation || mutationChance > 0)));
             setHidden(getEl('gravityWellParamsContainer'), !enableGravityWells);
-            setHidden(getEl('absorptionParamsContainer'), !settings.enableAbsorptionExplosion); 
+            setHidden(getEl('absorptionParamsContainer'), !settings.enableAbsorptionExplosion);
             setHidden(getEl('predatorPreyParamsContainer'), !settings.enablePredatorPrey);
-            setHidden(getEl('biomeNoiseParamsContainer'), !enableBiomes); 
+            setHidden(getEl('biomeNoiseParamsContainer'), !enableBiomes);
         }
-        function resetSimulation() { 
-            isPaused = false; 
+        function resetSimulation() {
+            if (!gl) return; 
+            isPaused = false;
             const pauseButton = document.getElementById('pauseResumeBtn');
             if(pauseButton) pauseButton.textContent = 'Pause';
+
             controlConfigurations.forEach(config => {
                  const inputElement = document.getElementById(config.id);
                  if (inputElement) {
                      let val;
                      if (inputElement.type === 'checkbox') val = inputElement.checked;
-                     else if (config.isInt) val = parseInt(inputElement.value); 
+                     else if (config.isInt) val = parseInt(inputElement.value);
                      else if (inputElement.type === 'range' || inputElement.type === 'number') val = parseFloat(inputElement.value);
                      else if (inputElement.tagName === 'SELECT') val = inputElement.value;
-                     else val = inputElement.value; 
-                     config.valueRef(val); 
+                     else val = inputElement.value;
+                     config.valueRef(val);
                  }
             });
-            updateConditionalControls(); 
+            updateConditionalControls();
             generateColors(numColors);
             initializeRules();
-            initializeBiomes(); // This will set worldNoiseNeedsUpdate = true if biomes enabled
-            createParticles(); 
-            createGravityWells(); 
-            const currentMaxDist = maxDist > 0 ? maxDist : 80; 
+            initializeBiomes(); 
+            createParticles();
+            createGravityWells();
+            totalAbsorbedByBH = 0;
+            if(absorbedByBHCountDisplay) absorbedByBHCountDisplay.textContent = totalAbsorbedByBH;
+
+            const currentMaxDist = maxDist > 0 ? maxDist : 80;
             spatialGrid = new SpatialGrid(WORLD_WIDTH, WORLD_HEIGHT, currentMaxDist);
-            if (spatialGrid) { 
+            if (spatialGrid) {
                  spatialGrid.clear();
                  particles.forEach(p => { if(p.isAlive) spatialGrid.addParticle(p); });
             }
            camera.x = WORLD_WIDTH / 2; camera.y = WORLD_HEIGHT / 2;
            const zoomSlider = document.getElementById('zoomLevel');
            const zoomValueDisplay = document.getElementById('zoomLevelValue');
-           if (zoomSlider) { 
-                camera.zoom = parseFloat(zoomSlider.value); 
-           } else { camera.zoom = 1; } 
+           if (zoomSlider) zoomSlider.value = camera.zoom;
            if (zoomValueDisplay) zoomValueDisplay.textContent = camera.zoom.toFixed(2);
-           
+
+           worldNoiseNeedsUpdate = true; 
            showToast("Simulation Reset & Running!");
-           stopAnimationLoop(); startAnimationLoop(); 
+           stopAnimationLoop(); startAnimationLoop();
        }
        function getMousePos(event) { 
            const rect = canvas.getBoundingClientRect();
            let clientX, clientY;
-           if (event.touches && event.touches.length > 0) { 
+           if (event.touches && event.touches.length > 0) {
                clientX = event.touches[0].clientX; clientY = event.touches[0].clientY;
-           } else if (event.clientX !== undefined) { 
+           } else if (event.clientX !== undefined) {
                clientX = event.clientX; clientY = event.clientY;
            } else { return { x: camera.x, y: camera.y }; } 
-           const canvasMouseX = clientX - rect.left; 
-           const canvasMouseY = clientY - rect.top;  
-           const worldX = camera.x + (canvasMouseX - canvas.width / 2) / camera.zoom;
-           const worldY = camera.y + (canvasMouseY - canvas.height / 2) / camera.zoom;
+
+           const canvasMouseX = clientX - rect.left;
+           const canvasMouseY = clientY - rect.top;
+
+           const worldX = (canvasMouseX - WORLD_WIDTH / 2) / camera.zoom + camera.x;
+           const worldY = (canvasMouseY - WORLD_HEIGHT / 2) / camera.zoom + camera.y;
+           
            return { x: worldX, y: worldY };
        }
         function buildRuleEditor() { 
             const editorDiv = document.getElementById('ruleEditor');
             if (!editorDiv) return;
-            editorDiv.innerHTML = ''; 
+            editorDiv.innerHTML = '';
             const table = document.createElement('table'); const tbody = document.createElement('tbody');
-            const headerRow = document.createElement('tr'); 
-            const thEmpty = document.createElement('th'); 
+            const headerRow = document.createElement('tr'); const thEmpty = document.createElement('th');
             headerRow.appendChild(thEmpty);
             for (let j = 0; j < numColors; j++) {
                 const th = document.createElement('th');
-                th.style.backgroundColor = COLORS[j % COLORS.length];
-                th.style.width = '20px'; th.style.height = '20px'; 
+                th.style.backgroundColor = COLORS_HSL[j % COLORS_HSL.length]; 
+                th.style.width = '20px'; th.style.height = '20px';
                 headerRow.appendChild(th);
             }
             tbody.appendChild(headerRow);
             for (let i = 0; i < numColors; i++) {
                 const row = document.createElement('tr');
-                const thRow = document.createElement('th'); 
-                thRow.style.backgroundColor = COLORS[i % COLORS.length];
+                const thRow = document.createElement('th');
+                thRow.style.backgroundColor = COLORS_HSL[i % COLORS_HSL.length]; 
                 thRow.style.width = '20px'; thRow.style.height = '20px';
                 row.appendChild(thRow);
                 for (let j = 0; j < numColors; j++) {
                     const cell = document.createElement('td');
                     const ruleValue = (rules[i] && typeof rules[i][j] !== 'undefined') ? rules[i][j] : 0;
-                    cell.textContent = ruleValue.toFixed(2); 
-                    cell.dataset.row = i; cell.dataset.col = j; 
-                    if (ruleValue > 0) cell.style.color = '#6ee7b7'; 
-                    else if (ruleValue < 0) cell.style.color = '#f87171'; 
-                    else cell.style.color = '#9ca3af'; 
+                    cell.textContent = ruleValue.toFixed(2);
+                    cell.dataset.row = i; cell.dataset.col = j;
+                    if (ruleValue > 0) cell.style.color = '#6ee7b7';
+                    else if (ruleValue < 0) cell.style.color = '#f87171';
+                    else cell.style.color = '#9ca3af';
                     cell.addEventListener('click', () => {
-                        const cycleValues = [-1.0, -0.5, -0.2, 0, 0.2, 0.5, 1.0]; 
+                        const cycleValues = [-1.0, -0.5, -0.2, 0, 0.2, 0.5, 1.0];
                         let currentRuleVal = (rules[i] && typeof rules[i][j] !== 'undefined') ? rules[i][j] : 0;
-                        currentRuleVal = parseFloat(currentRuleVal.toFixed(2)); 
-                        let currentIndex = cycleValues.findIndex(v => Math.abs(v - currentRuleVal) < 0.001); 
-                        if (currentIndex === -1) currentIndex = cycleValues.indexOf(0); 
-                        rules[i][j] = cycleValues[(currentIndex + 1) % cycleValues.length]; 
-                        cell.textContent = rules[i][j].toFixed(2); 
+                        currentRuleVal = parseFloat(currentRuleVal.toFixed(2));
+                        let currentIndex = cycleValues.findIndex(v => Math.abs(v - currentRuleVal) < 0.001);
+                        if (currentIndex === -1) currentIndex = cycleValues.indexOf(0);
+                        rules[i][j] = cycleValues[(currentIndex + 1) % cycleValues.length];
+                        cell.textContent = rules[i][j].toFixed(2);
                          if (rules[i][j] > 0) cell.style.color = '#6ee7b7';
                          else if (rules[i][j] < 0) cell.style.color = '#f87171';
                          else cell.style.color = '#9ca3af';
@@ -1441,56 +1654,68 @@ function stopAnimationLoop() {
         function updateColorPicker() { 
             const pickerDiv = document.getElementById('colorPicker');
             if (!pickerDiv) return;
-            pickerDiv.innerHTML = ''; 
-            COLORS.forEach((color, index) => {
+            pickerDiv.innerHTML = '';
+            COLORS_HSL.forEach((color, index) => { 
                 const button = document.createElement('button');
                 button.classList.add('color-picker-button', 'rounded-full');
                 button.style.backgroundColor = color;
-                if (index === selectedColorForAdding) button.classList.add('selected'); 
+                if (index === selectedColorForAdding) button.classList.add('selected');
                 button.addEventListener('click', () => {
-                    selectedColorForAdding = index; updateColorPicker(); 
+                    selectedColorForAdding = index; updateColorPicker();
                 });
                 pickerDiv.appendChild(button);
             });
         }
+        let noiseParamDebounceTimer = null;
+        function handleNoiseParamChange(paramName, valueSetter, value, isInt = false) { 
+            valueSetter(isInt ? parseInt(value) : parseFloat(value));
+
+            const valueDisplay = document.getElementById(paramName + 'Value');
+            if (valueDisplay) valueDisplay.textContent = value;
+
+            clearTimeout(noiseParamDebounceTimer);
+            noiseParamDebounceTimer = setTimeout(() => {
+                worldNoiseNeedsUpdate = true;
+                if (isPaused && animationFrameId === null && enableBiomes && gl) { 
+                    drawScene();
+                }
+            }, 250);
+        }
         function setupEventListeners() { 
-            controlConfigurations = [
+             controlConfigurations = [
                 { id: 'numParticles', isInt: true, resetOnChange: true, valueRef: (val) => numParticles = val },
                 { id: 'numColors', isInt: true, resetOnChange: true, valueRef: (val) => numColors = val },
                 { id: 'particleRadius', isInt: false, resetOnChange: false, valueRef: (val) => {
-                    particleRadius = val; 
-                    if(particles) particles.forEach(p => { 
-                        if (p.type === 'normal' && !p.parentTraits) { 
-                             p.baseRadius = particleRadius; p.radius = p.baseRadius * Math.sqrt(p.mass); p.radius = Math.max(1, p.radius);
-                        }
-                    }); 
+                    particleRadius = val;
                 }},
-                { id: 'forceFactor', isInt: false, resetOnChange: false, valueRef: (val) => forceFactor = val }, 
+                { id: 'forceFactor', isInt: false, resetOnChange: false, valueRef: (val) => forceFactor = val },
                 { id: 'maxDist', isInt: false, resetOnChange: false, valueRef: (val) => {
                     maxDist = val; const cMaxDist = maxDist > 0 ? maxDist : 80;
-                    if (spatialGrid && WORLD_WIDTH > 0 && WORLD_HEIGHT > 0) spatialGrid = new SpatialGrid(WORLD_WIDTH, WORLD_HEIGHT, cMaxDist); 
+                    if (spatialGrid && WORLD_WIDTH > 0 && WORLD_HEIGHT > 0) {
+                        spatialGrid = new SpatialGrid(WORLD_WIDTH, WORLD_HEIGHT, cMaxDist);
+                    }
                 }},
-                { id: 'viscosity', isInt: false, resetOnChange: false, valueRef: (val) => viscosity = val }, 
+                { id: 'viscosity', isInt: false, resetOnChange: false, valueRef: (val) => viscosity = val },
                 { id: 'simulationSpeed', isInt: false, resetOnChange: false, valueRef: (val) => simulationSpeed = val },
                 { id: 'maxForce', isInt: false, resetOnChange: false, valueRef: (val) => maxForce = val },
                 { id: 'forceModel', type: 'select', resetOnChange: false, valueRef: (val) => { forceModel = val; updateConditionalControls(); } },
                 { id: 'ljEquilibriumDistance', isInt: false, resetOnChange: false, valueRef: (val) => ljEquilibriumDistance = val },
                 { id: 'boundaryCondition', type: 'select', resetOnChange: false, valueRef: (val) => boundaryCondition = val },
                 { id: 'enableAgeDeath', type: 'checkbox', resetOnChange: false, valueRef: (val) => { enableAgeDeath = val; updateConditionalControls(); } },
-                { id: 'maxParticleAge', isInt: true, resetOnChange: false, valueRef: (val) => maxParticleAge = val }, 
+                { id: 'maxParticleAge', isInt: true, resetOnChange: false, valueRef: (val) => maxParticleAge = val },
                 { id: 'enableSplitting', type: 'checkbox', resetOnChange: false, valueRef: (val) => { enableSplitting = val; updateConditionalControls(); } },
                 { id: 'reproductionAgeFactor', isInt: false, resetOnChange: false, valueRef: (val) => reproductionAgeFactor = val },
                 { id: 'reproductionChance', isInt: false, resetOnChange: false, valueRef: (val) => reproductionChance = val },
                 { id: 'offspringCount', isInt: true, resetOnChange: false, valueRef: (val) => offspringCount = val },
                 { id: 'offspringVelocityBoost', isInt: false, resetOnChange: false, valueRef: (val) => offspringVelocityBoost = val },
                 { id: 'enableColorMutation', type: 'checkbox', resetOnChange: false, valueRef: (val) => { enableColorMutation = val; updateConditionalControls(); } },
-                { id: 'mutationChance', isInt: false, resetOnChange: false, valueRef: (val) => mutationChance = val }, 
+                { id: 'mutationChance', isInt: false, resetOnChange: false, valueRef: (val) => mutationChance = val },
                 { id: 'enableAbsorptionExplosion', type: 'checkbox', resetOnChange: false, valueRef: (val) => { settings.enableAbsorptionExplosion = val; updateConditionalControls(); } },
                 { id: 'energyParticlesPerExplosion', isInt: true, resetOnChange: false, valueRef: (val) => settings.energyParticlesPerExplosion = val },
                 { id: 'lifeExtensionPerEnergyParticle', isInt: true, resetOnChange: false, valueRef: (val) => settings.lifeExtensionPerEnergyParticle = val },
                 { id: 'energyParticleLifespan', isInt: true, resetOnChange: false, valueRef: (val) => settings.energyParticleLifespan = val },
                 { id: 'energyParticleRadius', isInt: false, resetOnChange: false, valueRef: (val) => settings.energyParticleRadius = val },
-                { id: 'absorptionRadiusFactor', isInt: false, resetOnChange: false, valueRef: (val) => settings.absorptionRadiusFactor = val }, 
+                { id: 'absorptionRadiusFactor', isInt: false, resetOnChange: false, valueRef: (val) => settings.absorptionRadiusFactor = val },
                 { id: 'massGainPerEnergy', isInt: false, resetOnChange: false, valueRef: (val) => settings.massGainPerEnergy = val },
                 { id: 'maxParticleMass', isInt: false, resetOnChange: false, valueRef: (val) => settings.maxParticleMass = val },
                 { id: 'enablePredatorPrey', type: 'checkbox', resetOnChange: false, valueRef: (val) => { settings.enablePredatorPrey = val; updateConditionalControls(); } },
@@ -1498,112 +1723,116 @@ function stopAnimationLoop() {
                 { id: 'massGainFromHunt', isInt: false, resetOnChange: false, valueRef: (val) => settings.massGainFromHunt = val },
                 { id: 'predatorSplitChanceOnHunt', isInt: false, resetOnChange: false, valueRef: (val) => settings.predatorSplitChanceOnHunt = val },
 
-                { id: 'enableBiomes', type: 'checkbox', resetOnChange: true, valueRef: (val) => { 
-                    enableBiomes = val; 
+                { id: 'enableBiomes', type: 'checkbox', resetOnChange: true, valueRef: (val) => {
+                    enableBiomes = val;
                     initializeBiomes(); 
-                } }, 
-                { id: 'noiseScaleSlider', isInt: false, resetOnChange: false, valueRef: (val) => { 
-                    noiseScale = val; worldNoiseNeedsUpdate = true;
-                    if (isPaused && animationFrameId === null && enableBiomes) drawScene(); 
-                }},
-                { id: 'noiseOctavesSlider', isInt: true, resetOnChange: false, valueRef: (val) => { 
-                    noiseOctaves = val; worldNoiseNeedsUpdate = true;
-                    if (isPaused && animationFrameId === null && enableBiomes) drawScene(); 
-                }},
-                { id: 'noisePersistenceSlider', isInt: false, resetOnChange: false, valueRef: (val) => { 
-                    noisePersistence = val; worldNoiseNeedsUpdate = true;
-                    if (isPaused && animationFrameId === null && enableBiomes) drawScene();
-                }},
+                } },
+                { id: 'noiseScaleSlider', isNoiseParam: true, isInt: false, valueRef: (val) => noiseScale = val },
+                { id: 'noiseOctavesSlider', isNoiseParam: true, isInt: true, valueRef: (val) => noiseOctaves = val },
+                { id: 'noisePersistenceSlider', isNoiseParam: true, isInt: false, valueRef: (val) => noisePersistence = val },
 
-                { id: 'enableGravityWells', type: 'checkbox', resetOnChange: true, valueRef: (val) => { enableGravityWells = val; updateConditionalControls(); createGravityWells(); } }, 
-                { id: 'numGravityWells', isInt: true, resetOnChange: true, valueRef: (val) => { numGravityWells = val; createGravityWells(); } }, 
-                { id: 'gravityWellMass', isInt: false, resetOnChange: false, valueRef: (val) => { gravityWellMass = val; if(heavyObjects.length>0) heavyObjects.forEach(h => h.mass = val); } }, 
+
+                { id: 'enableGravityWells', type: 'checkbox', resetOnChange: true, valueRef: (val) => { enableGravityWells = val; updateConditionalControls(); createGravityWells(); } },
+                { id: 'numGravityWells', isInt: true, resetOnChange: true, valueRef: (val) => { numGravityWells = val; createGravityWells(); } },
+                { id: 'gravityWellMass', isInt: false, resetOnChange: false, valueRef: (val) => { gravityWellMass = val; if(heavyObjects.length>0) heavyObjects.forEach(h => h.mass = val); } },
                 { id: 'gravityConstant', isInt: false, resetOnChange: false, valueRef: (val) => gravityConstant = val },
-                { id: 'gravityWellRadius', isInt: false, resetOnChange: false, valueRef: (val) => { gravityWellRadius = val; if(heavyObjects.length>0) heavyObjects.forEach(h => h.radius = val); } },
+                { id: 'gravityWellRadius', isInt: false, resetOnChange: false, valueRef: (val) => { gravityWellRadius = val; if(heavyObjects.length>0) heavyObjects.forEach(h => h.eventHorizonRadius = val); } },
                 { id: 'zoomLevel', isInt: false, resetOnChange: false, valueRef: (val) => camera.zoom = val},
                 { id: 'trailOpacity', isInt: false, resetOnChange: false, valueRef: (val) => trailOpacity = val },
             ];
             controlConfigurations.forEach(config => {
                 const input = document.getElementById(config.id);
-                const valueDisplayId = config.id.endsWith('Slider') ? config.id.replace('Slider', 'Value') : config.id + 'Value';
-                const valueDisplay = document.getElementById(valueDisplayId);
+                const valueDisplay = document.getElementById(config.id.replace("Slider","") + 'Value');
 
                 if(!input) { console.warn("Control element not found:", config.id); return; }
-                
                 const eventType = (input.type === 'checkbox' || input.tagName === 'SELECT') ? 'change' : 'input';
-                input.addEventListener(eventType, () => { 
-                    let val;
-                    if (input.type === 'checkbox') val = input.checked;
-                    else if (input.tagName === 'SELECT') val = input.value;
-                    else if (config.isInt) val = parseInt(input.value);
-                    else val = parseFloat(input.value);
-                    
-                    if (valueDisplay && input.type === 'range') valueDisplay.textContent = input.value; 
-                    config.valueRef(val); 
-                    if (config.resetOnChange && !isPaused) resetSimulation(); 
-                });
+
+                if (config.isNoiseParam) {
+                    input.addEventListener(eventType, function() {
+                        handleNoiseParamChange.call(this, config.id.replace("Slider",""), config.valueRef, this.value, config.isInt);
+                    });
+                } else {
+                    input.addEventListener(eventType, () => {
+                        let val;
+                        if (input.type === 'checkbox') val = input.checked;
+                        else if (input.tagName === 'SELECT') val = input.value;
+                        else if (config.isInt) val = parseInt(input.value);
+                        else val = parseFloat(input.value);
+
+                        if (valueDisplay && input.type === 'range') valueDisplay.textContent = input.value;
+                        config.valueRef(val);
+                        if (config.resetOnChange && !isPaused) resetSimulation();
+                    });
+                }
                 if (valueDisplay && input.type === 'range') valueDisplay.textContent = input.value;
             });
-            document.getElementById('showTrails')?.addEventListener('change', (e) => showTrails = e.target.checked);
+
+            const panelTabHandle = document.querySelector('.control-panel-tab-handle');
+            if (panelTabHandle) { 
+                panelTabHandle.addEventListener('click', () => {
+                    const controlPanel = document.querySelector('.control-panel');
+                    if (controlPanel && controlPanel.classList.contains('minimized-for-fullscreen') && document.fullscreenElement) {
+                        controlPanel.classList.toggle('fully-expanded-in-fullscreen');
+                    }
+                });
+            }
+            document.getElementById('showTrails')?.addEventListener('change', (e) => {showTrails = e.target.checked; /* worldNoiseNeedsUpdate = true; // Not needed if only clear alpha changes */});
             document.getElementById('particleGlow')?.addEventListener('change', (e) => particleGlow = e.target.checked);
             document.getElementById('zoomLevel')?.addEventListener('input', (event) => {
                 camera.zoom = parseFloat(event.target.value);
                 const display = document.getElementById('zoomLevelValue');
                 if(display) display.textContent = `${camera.zoom.toFixed(2)}`;
-                if (isPaused && animationFrameId === null) drawScene(); 
+                if (isPaused && animationFrameId === null && gl) drawScene();
             });
             document.getElementById('brushMode')?.addEventListener('change', (e) => {
                 brushModeActive = e.target.checked;
-                if (brushModeActive) { 
-                    isPanning = false; 
-                    canvas.style.cursor = 'crosshair';
-                } else { 
-                    canvas.style.cursor = addWellOnClickMode ? 'crosshair' : 'grab'; 
-                }
+                if (brushModeActive) {
+                    isPanning = false; canvas.style.cursor = 'crosshair';
+                } else { canvas.style.cursor = addWellOnClickMode ? 'crosshair' : 'grab'; }
             });
             document.getElementById('randomizeRulesBtn')?.addEventListener('click', () => { initializeRules(); showToast("Rules Randomized"); });
             document.getElementById('pauseResumeBtn')?.addEventListener('click', () => {
-                isPaused = !isPaused; stepMode = false; 
+                isPaused = !isPaused; stepMode = false;
                 const button = document.getElementById('pauseResumeBtn');
                 if (button) button.textContent = isPaused ? 'Resume' : 'Pause';
-                if (isPaused) stopAnimationLoop(); else startAnimationLoop(); 
+                if (isPaused) stopAnimationLoop(); else startAnimationLoop();
             });
             document.getElementById('stepBtn')?.addEventListener('click', () => {
-                isPaused = true; stepMode = true; 
+                isPaused = true; stepMode = true;
                 const pauseButton = document.getElementById('pauseResumeBtn');
-                if (pauseButton) pauseButton.textContent = 'Resume'; 
-                stopAnimationLoop(); 
-                animationFrameId = requestAnimationFrame(animationLoop); 
+                if (pauseButton) pauseButton.textContent = 'Resume';
+                stopAnimationLoop();
+                if (gl) animationFrameId = requestAnimationFrame(animationLoop); 
             });
             document.getElementById('fullscreenBtn')?.addEventListener('click', toggleFullScreen);
             document.getElementById('resetBtn')?.addEventListener('click', resetSimulation);
             document.getElementById('clearParticlesBtn')?.addEventListener('click', () => {
-                particles = []; if (spatialGrid) spatialGrid.clear(); 
-                if(particleCountDisplay) particleCountDisplay.textContent = particles.length; 
+                particles = []; if (spatialGrid) spatialGrid.clear();
+                if(particleCountDisplay) particleCountDisplay.textContent = particles.length;
                 showToast("All particles cleared");
             });
             document.getElementById('addGravityWellOnClickBtn')?.addEventListener('click', () => {
-                if (!enableGravityWells) { showToast("Enable Gravity Wells first!"); return; }
-                addWellOnClickMode = true; isPanning = false; brushModeActive = false; 
+                if (!enableGravityWells) { showToast("Enable Black Holes first!"); return; }
+                addWellOnClickMode = true; isPanning = false; brushModeActive = false;
                 const brushCheckbox = document.getElementById('brushMode');
-                if(brushCheckbox) brushCheckbox.checked = false; 
-                canvas.style.cursor = 'crosshair'; 
-                showToast("Click on canvas to add a gravity well.");
+                if(brushCheckbox) brushCheckbox.checked = false;
+                canvas.style.cursor = 'crosshair';
+                showToast("Click on canvas to add a Black Hole.");
             });
              document.getElementById('regenerateNoiseSeedBtn')?.addEventListener('click', () => {
-                noiseSeed = Math.random(); 
-                if (noiseGenerator) noiseGenerator.seed(noiseSeed); 
-                worldNoiseNeedsUpdate = true; // Important: Flag for offscreen canvas regeneration
+                noiseSeed = Math.random();
+                if (noiseGenerator) noiseGenerator.seed(noiseSeed);
+                worldNoiseNeedsUpdate = true;
                 showToast("Noise seed regenerated.");
-                if (isPaused && animationFrameId === null && enableBiomes) drawScene(); 
+                if (isPaused && animationFrameId === null && enableBiomes && gl) drawScene();
             });
             canvas.addEventListener('mousedown', (event) => {
                 if (event.button === 0) { 
-                    if (brushModeActive) { 
+                    if (brushModeActive) {
                         isMouseDownForBrush = true; const { x, y } = getMousePos(event);
-                        addParticleAt(x, y, event.type); 
+                        addParticleAt(x, y, event.type);
                     } else if (addWellOnClickMode) { /* Handled by click */ }
-                    else {
+                    else { 
                         isPanning = true;
                         lastPanX = event.clientX;
                         lastPanY = event.clientY;
@@ -1615,11 +1844,12 @@ function stopAnimationLoop() {
                 if (isPanning) {
                     const dx = event.clientX - lastPanX; const dy = event.clientY - lastPanY;
                     lastPanX = event.clientX; lastPanY = event.clientY;
-                    camera.x -= dx / camera.zoom; camera.y -= dy / camera.zoom;
-                    if (isPaused && animationFrameId === null) drawScene();
-                    event.preventDefault(); 
+                    camera.x -= dx / camera.zoom;
+                    camera.y -= dy / camera.zoom;
+                    if (isPaused && animationFrameId === null && gl) drawScene();
+                    event.preventDefault();
                 } else if (brushModeActive && isMouseDownForBrush) {
-                    const { x, y } = getMousePos(event); addParticleAt(x, y, event.type); 
+                    const { x, y } = getMousePos(event); addParticleAt(x, y, event.type);
                 }
             });
             window.addEventListener('mouseup', (event) => { 
@@ -1629,91 +1859,100 @@ function stopAnimationLoop() {
                 }
             });
             canvas.addEventListener('click', (event) => {
-                if (isPanning || (brushModeActive && event.type === "click" && isMouseDownForBrush)) return;
+                if (isPanning || (brushModeActive && event.type === "click" && isMouseDownForBrush)) return; 
                 const { x, y } = getMousePos(event);
                 if (addWellOnClickMode && enableGravityWells) {
                     if (heavyObjects.length < parseInt(document.getElementById('numGravityWells').max)) {
-                        heavyObjects.push(new HeavyObject(x, y, gravityWellMass, gravityWellRadius));
-                        showToast(`Gravity well added at (${Math.round(x)}, ${Math.round(y)})`);
-                        if (heavyObjects.length >= numGravityWells) { 
+                        heavyObjects.push(new BlackHole(x, y, gravityWellMass, gravityWellRadius));
+                        showToast(`Black Hole added at (${Math.round(x)}, ${Math.round(y)})`);
+                        if (heavyObjects.length >= numGravityWells) {
                              addWellOnClickMode = false; canvas.style.cursor = brushModeActive ? 'crosshair' : 'grab';
                         }
                     } else {
-                        showToast('Max number of gravity wells for current setting reached.');
+                        showToast('Max number of Black Holes for current setting reached.');
                         addWellOnClickMode = false; canvas.style.cursor = brushModeActive ? 'crosshair' : 'grab';
-                    } return; 
+                    } return;
                 }
                 if (!brushModeActive && !addWellOnClickMode) { addParticleAt(x, y, event.type); }
             });
             canvas.addEventListener('wheel', (event) => {
-                event.preventDefault(); 
+                event.preventDefault();
                 const rect = canvas.getBoundingClientRect();
-                const mouseX_canvas = event.clientX - rect.left; const mouseY_canvas = event.clientY - rect.top;  
-                const worldX_before = camera.x + (mouseX_canvas - canvas.width / 2) / camera.zoom;
-                const worldY_before = camera.y + (mouseY_canvas - canvas.height / 2) / camera.zoom;
-                const zoomIntensity = 0.1; const wheelDelta = event.deltaY < 0 ? 1 : -1; 
+                const mouseX_canvas = event.clientX - rect.left; const mouseY_canvas = event.clientY - rect.top;
+
+                const worldX_before = (mouseX_canvas - WORLD_WIDTH / 2) / camera.zoom + camera.x;
+                const worldY_before = (mouseY_canvas - WORLD_HEIGHT / 2) / camera.zoom + camera.y;
+
+                const zoomIntensity = 0.1; const wheelDelta = event.deltaY < 0 ? 1 : -1;
                 camera.zoom = Math.max(0.1, Math.min(5.0, camera.zoom * Math.exp(wheelDelta * zoomIntensity)));
-                camera.x = worldX_before - (mouseX_canvas - canvas.width / 2) / camera.zoom;
-                camera.y = worldY_before - (mouseY_canvas - canvas.height / 2) / camera.zoom;
+
+                camera.x = worldX_before - (mouseX_canvas - WORLD_WIDTH / 2) / camera.zoom;
+                camera.y = worldY_before - (mouseY_canvas - WORLD_HEIGHT / 2) / camera.zoom;
+
                 const zoomSlider = document.getElementById('zoomLevel');
                 const zoomValueDisplay = document.getElementById('zoomLevelValue');
                 if (zoomSlider) zoomSlider.value = camera.zoom;
                 if (zoomValueDisplay) zoomValueDisplay.textContent = camera.zoom.toFixed(2);
-                if (isPaused && animationFrameId === null) drawScene();
-            }, { passive: false }); 
-            canvas.addEventListener('touchstart', (e) => {
-                if (brushModeActive) {
-                    isMouseDownForBrush = true; 
+                if (isPaused && animationFrameId === null && gl) drawScene();
+            }, { passive: false });
+            canvas.addEventListener('touchstart', (e) => { 
+                 if (brushModeActive) {
+                    isMouseDownForBrush = true;
                     const touch = e.touches[0];
                     if (touch) { const { x, y } = getMousePos(touch); addParticleAt(x, y, e.type); }
                     e.preventDefault();
-                } else if (!addWellOnClickMode && e.touches.length === 1) { 
+                } else if (!addWellOnClickMode && e.touches.length === 1) {
                     isPanning = true; lastPanX = e.touches[0].clientX; lastPanY = e.touches[0].clientY;
                     e.preventDefault();
                 }
             }, { passive: false });
-            canvas.addEventListener('touchmove', (e) => {
+            canvas.addEventListener('touchmove', (e) => { 
                 if (isPanning && e.touches.length === 1) {
                     const touch = e.touches[0];
                     const dx = touch.clientX - lastPanX; const dy = touch.clientY - lastPanY;
                     lastPanX = touch.clientX; lastPanY = touch.clientY;
                     camera.x -= dx / camera.zoom; camera.y -= dy / camera.zoom;
-                    if (isPaused && animationFrameId === null) drawScene();
+                    if (isPaused && animationFrameId === null && gl) drawScene();
                     e.preventDefault();
-                } else if (brushModeActive && isMouseDownForBrush) { 
+                } else if (brushModeActive && isMouseDownForBrush) {
                      const touch = e.touches[0];
                      if (touch) { const { x, y } = getMousePos(touch); addParticleAt(x, y, e.type); }
                     e.preventDefault();
                 }
             }, { passive: false });
-            canvas.addEventListener('touchend', (e) => {
+            canvas.addEventListener('touchend', (e) => { 
                 if (isPanning) isPanning = false;
                 if (isMouseDownForBrush) isMouseDownForBrush = false;
             });
-            window.addEventListener('keydown', (event) => {
-                if (event.key.toLowerCase() === 'h' && 
-                    !(event.target instanceof HTMLInputElement) && 
-                    !(event.target instanceof HTMLSelectElement) && 
-                    !(event.target instanceof HTMLTextAreaElement)) {
+            window.addEventListener('keydown', (event) => { 
+                if (event.key.toLowerCase() === 'h' && !(event.target instanceof HTMLInputElement) && !(event.target instanceof HTMLSelectElement) && !(event.target instanceof HTMLTextAreaElement)) {
                     toggleSidebarVisibility();
                 }
             });
-            document.addEventListener('fullscreenchange', () => {
+            document.addEventListener('fullscreenchange', () => { 
                 const fullscreenBtn = document.getElementById('fullscreenBtn');
                 const controlPanel = document.querySelector('.control-panel');
-                if (!document.fullscreenElement) { 
-                    if (fullscreenBtn) fullscreenBtn.textContent = 'Fullscreen';
-                    if (controlPanel && controlPanel.dataset.hiddenByFullscreen === 'true' && !controlPanel.dataset.hiddenByKey) {
-                        controlPanel.classList.remove('hidden');
-                    }
-                    if (controlPanel) controlPanel.removeAttribute('data-hidden-by-fullscreen');
-                } else { 
+
+                if (document.fullscreenElement) {
                     if (fullscreenBtn) fullscreenBtn.textContent = 'Exit Fullscreen';
+                    if (controlPanel && !controlPanel.classList.contains('hidden-by-h-key')) {
+                        controlPanel.classList.add('minimized-for-fullscreen');
+                        controlPanel.dataset.minimizedByFullscreen = 'true';
+                    }
+                } else {
+                    if (fullscreenBtn) fullscreenBtn.textContent = 'Fullscreen';
+                    if (controlPanel) {
+                        if (controlPanel.dataset.minimizedByFullscreen === 'true') {
+                            controlPanel.classList.remove('minimized-for-fullscreen');
+                            controlPanel.classList.remove('fully-expanded-in-fullscreen');
+                        }
+                        controlPanel.removeAttribute('data-minimized-by-fullscreen');
+                    }
                 }
-                setTimeout(resizeCanvas, 150);
+                setTimeout(resizeCanvas, 150); 
             });
         }
-        function addParticleAt(x, y, eventType) { 
+        function addParticleAt(x, y, eventType) {
              if (x >= 0 && x <= WORLD_WIDTH && y >= 0 && y <= WORLD_HEIGHT) {
                 if (particles.filter(p => p.isAlive).length < MAX_TOTAL_PARTICLES) {
                     const newP = new Particle(x, y, selectedColorForAdding, 'normal');
@@ -1725,7 +1964,7 @@ function stopAnimationLoop() {
                         showToast(`Max particle limit (${MAX_TOTAL_PARTICLES}) reached`);
                     }
                     if(isMouseDownForBrush && (eventType === 'mousemove' || eventType === 'touchmove')) {
-                        isMouseDownForBrush = false;
+                        isMouseDownForBrush = false; 
                     }
                 }
             }
@@ -1737,30 +1976,28 @@ function stopAnimationLoop() {
             setTimeout(() => { toast.classList.remove('show'); }, 3000);
         }
 
-        // --- Main Simulation Loop ---
         function animationLoop(timestamp) {
-            const raw_dt = Math.min(0.1, (timestamp - lastFrameTime) / 1000 || 1/60); 
+            if (!gl) { 
+                stopAnimationLoop();
+                return;
+            }
+            const raw_dt = Math.min(0.1, (timestamp - lastFrameTime) / 1000 || 1/60);
             lastFrameTime = timestamp;
-            let allNewParticlesThisFrame = []; 
+            let allNewParticlesThisFrame = [];
 
-            if (enableBiomes && noiseGenerator && settings.enableAbsorptionExplosion) {
-                const RESOURCE_SPAWN_CHANCE_PER_FRAME = 0.03; 
-                const MAX_ENERGY_IN_WORLD_FROM_NOISE = 75; 
-                const SPAWN_ATTEMPTS = 3; 
-                let totalSpawnWeight = 0;
-                for (const biomeKey in BIOME_SETTINGS) {
-                    totalSpawnWeight += (BIOME_SETTINGS[biomeKey].spawnWeight || 0);
-                }
-
+            if (enableBiomes && noiseGenerator && settings.enableAbsorptionExplosion) { 
+                const RESOURCE_SPAWN_CHANCE_PER_FRAME = 0.03;
+                const MAX_ENERGY_IN_WORLD_FROM_NOISE = 75;
+                const SPAWN_ATTEMPTS = 3;
 
                 if (Math.random() < RESOURCE_SPAWN_CHANCE_PER_FRAME) {
                     let currentEnergyParticlesCount = particles.filter(p => p.isAlive && p.type === 'energy').length;
                     if (currentEnergyParticlesCount < MAX_ENERGY_IN_WORLD_FROM_NOISE && particles.filter(p => p.isAlive).length < MAX_TOTAL_PARTICLES) {
                         for (let attempt = 0; attempt < SPAWN_ATTEMPTS; attempt++) {
-                            const spawnX = Math.random() * WORLD_WIDTH; 
+                            const spawnX = Math.random() * WORLD_WIDTH;
                             const spawnY = Math.random() * WORLD_HEIGHT;
                             const noiseVal = noiseGenerator.octaveNoise(spawnX / noiseScale, spawnY / noiseScale, noiseOctaves, noisePersistence);
-                            
+
                             let chosenBiomeForSpawn = BIOME_SETTINGS.DEFAULT_SPACE;
                             for (const biomeKey in BIOME_SETTINGS) {
                                 if (biomeKey === 'DEFAULT_SPACE') continue;
@@ -1772,17 +2009,11 @@ function stopAnimationLoop() {
                                     break;
                                 }
                             }
-
-                            // Simplified spawn: if biome has positive spawn weight, try to spawn.
-                            // A more complex weighted random choice could be used.
-                            if (chosenBiomeForSpawn.spawnWeight > 0) {
-                                // Normalize spawn chance somewhat, e.g. spawnWeight of 5 means 50% chance if this biome is hit
-                                if (Math.random() < (chosenBiomeForSpawn.spawnWeight / 10)) { 
-                                    if (particles.filter(p => p.isAlive).length + allNewParticlesThisFrame.length < MAX_TOTAL_PARTICLES) {
-                                        const energyP = new Particle(spawnX, spawnY, 0, 'energy');
-                                        allNewParticlesThisFrame.push(energyP);
-                                        break; 
-                                    }
+                            if (chosenBiomeForSpawn.spawnWeight > 0 && Math.random() < (chosenBiomeForSpawn.spawnWeight / 10)) {
+                                if (particles.filter(p => p.isAlive).length + allNewParticlesThisFrame.length < MAX_TOTAL_PARTICLES) {
+                                    const energyP = new Particle(spawnX, spawnY, 0, 'energy');
+                                    allNewParticlesThisFrame.push(energyP);
+                                    break;
                                 }
                             }
                         }
@@ -1790,26 +2021,22 @@ function stopAnimationLoop() {
                 }
             }
 
-            for (let i = particles.length - 1; i >= 0; i--) {
+            for (let i = particles.length - 1; i >= 0; i--) { 
                 const p = particles[i];
                 if (!p.isAlive) continue;
-                // Pass nearby particles from grid for AI, or all particles if grid not yet populated/used for this.
-                // For simplicity in this step, AI will use spatialGrid.getNearbyParticles directly if available.
-                const nearbyForAI = spatialGrid ? spatialGrid.getNearbyParticles(p) : particles;
-                const updateResult = p.update(raw_dt, nearbyForAI); 
-                
+                const updateResult = p.update(raw_dt, particles);
                 if (updateResult.newParticlesFromSplit) {
                     allNewParticlesThisFrame.push(...updateResult.newParticlesFromSplit);
                 }
                 if (p.isAlive && p.type === 'normal' && updateResult.shouldExplode) {
-                     if (settings.enableAbsorptionExplosion) { 
-                        const energyBits = p.explode(); 
+                     if (settings.enableAbsorptionExplosion) {
+                        const energyBits = p.explode();
                         allNewParticlesThisFrame.push(...energyBits);
                     } else { p.isAlive = false; }
                 }
             }
             const currentLiveParticleCount = particles.filter(p => p.isAlive).length;
-            if (allNewParticlesThisFrame.length > 0) {
+            if (allNewParticlesThisFrame.length > 0) { 
                 const availableSlots = MAX_TOTAL_PARTICLES - currentLiveParticleCount;
                 if (availableSlots > 0) {
                      particles.push(...allNewParticlesThisFrame.slice(0, Math.min(allNewParticlesThisFrame.length, availableSlots)));
@@ -1817,64 +2044,98 @@ function stopAnimationLoop() {
             }
             particles = particles.filter(p => p.isAlive);
 
+            if (enableGravityWells && heavyObjects.length > 0) {
+                particles.forEach(p => {
+                    if (!p.isAlive) return;
+                    heavyObjects.forEach(bh => {
+                        const dx = bh.x - p.x;
+                        const dy = bh.y - p.y;
+                        const distSq = dx * dx + dy * dy;
 
-            if (spatialGrid) {
+                        if (distSq > 0) {
+                            const dist = Math.sqrt(distSq);
+                            const force = (gravityConstant * bh.mass * p.mass) / distSq;
+                            let ax = (force * dx / dist) / p.mass;
+                            let ay = (force * dy / dist) / p.mass;
+
+                            const totalBHAccelerationMag = Math.sqrt(ax*ax + ay*ay);
+                            const maxBHForce = maxForce * 2;
+                            if (totalBHAccelerationMag > maxBHForce) {
+                                const scale = maxBHForce / totalBHAccelerationMag;
+                                ax *= scale; ay *= scale;
+                            }
+                            p.vx += ax * raw_dt * simulationSpeed;
+                            p.vy += ay * raw_dt * simulationSpeed;
+                        }
+
+                        if (p.type !== 'energy' && distSq < bh.eventHorizonRadius * bh.eventHorizonRadius) {
+                            p.isAlive = false;
+                            bh.absorb();
+                        }
+                    });
+                });
+            }
+
+
+            if (spatialGrid) { 
                 spatialGrid.clear();
                 particles.forEach(p => { if(p.isAlive) spatialGrid.addParticle(p); });
-                
+
                 let particlesToSplitFromHunt = [];
 
                 particles.forEach(p1 => {
                     if (!p1.isAlive) return;
                     const nearby = spatialGrid.getNearbyParticles(p1);
                     nearby.forEach(p2 => {
-                        if (!p2.isAlive || p1 === p2) return; 
-                        
+                        if (!p2.isAlive || p1 === p2) return;
+
                         if (settings.enablePredatorPrey && p1.type === 'normal' && p2.type === 'normal' &&
-                            p1.isPredator && p1.huntsColor === p2.color && !p2.isPredator) { 
+                            p1.isPredator && p1.huntsColor === p2.colorIndex && !p2.isPredator) {
                             const dxHunt = p1.x - p2.x;
                             const dyHunt = p1.y - p2.y;
                             const distSqHunt = dxHunt * dxHunt + dyHunt * dyHunt;
                             const collisionDistHunt = p1.radius + p2.radius;
 
-                            if (distSqHunt < collisionDistHunt * collisionDistHunt) { 
-                                p2.isAlive = false; 
+                            if (distSqHunt < collisionDistHunt * collisionDistHunt) {
+                                p2.isAlive = false;
                                 p1.age = Math.max(0, p1.age - settings.lifeGainFromHunt);
                                 p1.mass += settings.massGainFromHunt;
                                 p1.mass = Math.min(p1.mass, settings.maxParticleMass);
                                 p1.radius = p1.baseRadius * Math.sqrt(p1.mass);
                                 p1.radius = Math.max(1, p1.radius);
-                                p1.state = 'was_hunting'; 
+
+                                p1.state = 'was_hunting';
                                 p1.targetParticle = null;
                                 p1.stateTicks = 0;
+
                                 if (enableSplitting && Math.random() < settings.predatorSplitChanceOnHunt) {
-                                   particlesToSplitFromHunt.push(p1); 
+                                   particlesToSplitFromHunt.push(p1);
                                 }
-                                return; 
+                                return;
                             }
                         }
 
                         if (settings.enableAbsorptionExplosion &&
                             p1.type === 'normal' && p2.type === 'energy' &&
-                            p1.isAlive && p2.isAlive) { 
+                            p1.isAlive && p2.isAlive) {
                             const dxAbsorb = p1.x - p2.x; const dyAbsorb = p1.y - p2.y;
                             const distSqAbsorb = dxAbsorb * dxAbsorb + dyAbsorb * dyAbsorb;
-                            const absorbDist = (p1.radius * p1.individualAbsorptionRadiusFactor) + p2.radius; 
+                            const absorbDist = (p1.radius * p1.individualAbsorptionRadiusFactor) + p2.radius;
                             if (distSqAbsorb < absorbDist * absorbDist) { p1.absorb(p2); }
                         }
-                        
-                        if (p1.type === 'normal' && p2.type === 'normal' && p1.isAlive && p2.isAlive) { 
-                            const r1c = p1.color % (rules.length > 0 ? rules.length : 1); 
-                            const r2c = p2.color % (rules[r1c] ? rules[r1c].length : 1); 
+
+                        if (p1.type === 'normal' && p2.type === 'normal' && p1.isAlive && p2.isAlive) {
+                            const r1c = p1.colorIndex % (rules.length > 0 ? rules.length : 1);
+                            const r2c = p2.colorIndex % (rules[r1c] ? rules[r1c].length : 1);
                             const ruleVal = (rules[r1c] && typeof rules[r1c][r2c] !== 'undefined') ? rules[r1c][r2c] : 0;
                             p1.interact(p2, ruleVal, raw_dt);
                         }
                     });
                 });
-                if (particlesToSplitFromHunt.length > 0) {
+                if (particlesToSplitFromHunt.length > 0) { 
                     let newOffspringFromHunts = [];
                     particlesToSplitFromHunt.forEach(predator => {
-                        if (predator.isAlive) { 
+                        if (predator.isAlive) {
                             const offspring = predator.split();
                             if (offspring) newOffspringFromHunts.push(...offspring);
                         }
@@ -1889,135 +2150,203 @@ function stopAnimationLoop() {
                 }
             }
             particles = particles.filter(p => p.isAlive);
-            drawScene(); 
+
+            drawScene();
             frameCount++; const now = performance.now();
             const deltaFps = now - lastFpsUpdateTime;
-            if (deltaFps >= 1000) { 
+            if (deltaFps >= 1000) {
                 if(fpsDisplay) fpsDisplay.textContent = (frameCount / (deltaFps / 1000)).toFixed(1);
                 lastFpsUpdateTime = now; frameCount = 0;
             }
             if(particleCountDisplay) particleCountDisplay.textContent = particles.length;
             if (stepMode) {
-                isPaused = true; stepMode = false; 
+                isPaused = true; stepMode = false;
                 const pauseBtn = document.getElementById('pauseResumeBtn');
                 if (pauseBtn) pauseBtn.textContent = 'Resume';
-                animationFrameId = null; 
-                return; 
+                animationFrameId = null;
+                return;
             }
             if (!isPaused) animationFrameId = requestAnimationFrame(animationLoop);
-            else animationFrameId = null; 
+            else animationFrameId = null;
         }
-
 
         function drawScene() {
-            const W = canvas.width;
-            const H = canvas.height;
+            if (!gl) return;
 
-            // 1. Background Fading / Clearing
-            if (showTrails) {
-                ctx.fillStyle = `rgba(17, 24, 39, ${trailOpacity})`; // Base fade color
-                ctx.fillRect(0, 0, W, H);
-            } else {
-                ctx.fillStyle = '#111827'; // Solid default background
-                ctx.fillRect(0, 0, W, H);
+            gl.enable(gl.BLEND);
+            gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
+
+            const clearAlpha = showTrails ? (1.0 - trailOpacity) : 1.0; 
+            gl.clearColor(0.067, 0.094, 0.153, clearAlpha); 
+            gl.clear(gl.COLOR_BUFFER_BIT);
+
+            const time = performance.now();
+
+            if (enableBiomes) { 
+                if (worldNoiseNeedsUpdate) {
+                    updateWorldNoiseTexture(); 
+                }
+                gl.useProgram(backgroundShaderProgram);
+                gl.bindBuffer(gl.ARRAY_BUFFER, backgroundPositionBuffer);
+                gl.enableVertexAttribArray(backgroundPositionLocation);
+                gl.vertexAttribPointer(backgroundPositionLocation, 2, gl.FLOAT, false, 0, 0);
+                gl.activeTexture(gl.TEXTURE0);
+                gl.bindTexture(gl.TEXTURE_2D, biomeTexture); 
+                gl.uniform1i(backgroundTextureLocation, 0);
+                // gl.uniform1i(backgroundShowTrailsLocation, 1); // Removed
+                gl.drawArrays(gl.TRIANGLES, 0, 6);
+                gl.disableVertexAttribArray(backgroundPositionLocation);
             }
 
-            // 2. Draw Biome Background from Offscreen Canvas
-            if (enableBiomes && noiseGenerator) {
-                initializeOffscreenNoiseCanvas(); // Ensure it's created and sized
-                if (worldNoiseNeedsUpdate) { 
-                    updateWorldNoiseTexture(); // Regenerate if noise params changed
-                }
-                
-                if (offscreenNoiseCanvas) {
-                    // Calculate source rectangle (world coordinates) from camera view
-                    const sWidth = W / camera.zoom;
-                    const sHeight = H / camera.zoom;
-                    const sx = camera.x - sWidth / 2;
-                    const sy = camera.y - sHeight / 2;
+            gl.useProgram(particleShaderProgram);
 
-                    // Draw the relevant part of the offscreen canvas to the main canvas
-                    ctx.drawImage(offscreenNoiseCanvas,
-                        sx, sy, sWidth, sHeight, // Source rectangle from offscreen canvas
-                        0, 0, W, H              // Destination rectangle on main canvas
-                    );
-                }
-            }
-            
-            // --- Pulsating effect for Radiation Zones (applied as an overlay) ---
-            if (enableBiomes && particleGlow) { // Only if biomes and glow are on
-                const time = performance.now();
+            gl.uniform2f(particleResolutionLocation, WORLD_WIDTH, WORLD_HEIGHT);
+            gl.uniform3f(particleCameraLocation, camera.x, camera.y, camera.zoom);
+            gl.uniform1i(particleGlowLocation, particleGlow);
+            gl.uniform1f(particleTimeLocation, time);
+
+            const numDrawableParticles = particles.length + heavyObjects.length * 2; 
+            if (numDrawableParticles > 0) {
+                const positions = new Float32Array(numDrawableParticles * 2);
+                const colors = new Float32Array(numDrawableParticles * 3);
+                const sizes = new Float32Array(numDrawableParticles);
+                const types = new Float32Array(numDrawableParticles); 
+                let offset = 0;
+
                 particles.forEach(p => {
-                    if (p.isAlive && p.type === 'normal' && p.inRadiationZone) {
-                        // Example: draw a pulsating aura around particles in radiation
-                        const pulseAlpha = (Math.sin(time * 0.005 + p.x * 0.05 + p.y * 0.03) * 0.5 + 0.5) * 0.3; // 0 to 0.3 alpha
-                        ctx.beginPath();
-                        ctx.arc(
-                            (p.x - camera.x) * camera.zoom + W / 2,
-                            (p.y - camera.y) * camera.zoom + H / 2,
-                            (p.radius + 5) * camera.zoom, // Aura slightly larger than particle
-                            0, Math.PI * 2
-                        );
-                        // Color of radiation biome for aura
-                        const radColor = BIOME_SETTINGS.RADIATION_ZONE.colorFn(0.8, p.x, p.y); // Get base color
-                        ctx.fillStyle = `rgba(${radColor.r}, ${radColor.g}, ${radColor.b}, ${pulseAlpha})`;
-                        ctx.fill();
-                    }
+                    if (!p.isAlive) return;
+                    positions[offset * 2] = p.x;
+                    positions[offset * 2 + 1] = p.y;
+                    const rgbColor = COLORS_RGB[p.colorIndex % COLORS_RGB.length] || [1,1,1]; 
+                    colors[offset * 3] = rgbColor[0];
+                    colors[offset * 3 + 1] = rgbColor[1];
+                    colors[offset * 3 + 2] = rgbColor[2];
+                    sizes[offset] = p.radius;
+                    types[offset] = p.type === 'energy' ? 1.0 : 0.0;
+                    offset++;
                 });
+
+                heavyObjects.forEach(bh => {
+                    positions[offset * 2] = bh.x;
+                    positions[offset * 2 + 1] = bh.y;
+                    colors[offset * 3] = 0; colors[offset * 3 + 1] = 0; colors[offset * 3 + 2] = 0; 
+                    sizes[offset] = bh.eventHorizonRadius;
+                    types[offset] = 2.0; 
+                    offset++;
+
+                    const diskRadius = bh.eventHorizonRadius * 2.5; 
+                    positions[offset * 2] = bh.x;
+                    positions[offset * 2 + 1] = bh.y;
+                    colors[offset * 3] = 0.8; colors[offset * 3 + 1] = 0.7; colors[offset * 3 + 2] = 1.0; 
+                    sizes[offset] = diskRadius; 
+                    types[offset] = 3.0; 
+                    offset++;
+                });
+
+                const actualDrawableCount = offset; 
+
+                if (actualDrawableCount > 0) {
+                    gl.bindBuffer(gl.ARRAY_BUFFER, particlePositionBuffer);
+                    gl.bufferData(gl.ARRAY_BUFFER, positions.subarray(0, actualDrawableCount * 2), gl.DYNAMIC_DRAW);
+                    gl.enableVertexAttribArray(particlePositionLocation);
+                    gl.vertexAttribPointer(particlePositionLocation, 2, gl.FLOAT, false, 0, 0);
+
+                    gl.bindBuffer(gl.ARRAY_BUFFER, particleColorBuffer);
+                    gl.bufferData(gl.ARRAY_BUFFER, colors.subarray(0, actualDrawableCount * 3), gl.DYNAMIC_DRAW);
+                    gl.enableVertexAttribArray(particleColorLocation);
+                    gl.vertexAttribPointer(particleColorLocation, 3, gl.FLOAT, false, 0, 0);
+
+                    gl.bindBuffer(gl.ARRAY_BUFFER, particleSizeBuffer);
+                    gl.bufferData(gl.ARRAY_BUFFER, sizes.subarray(0, actualDrawableCount), gl.DYNAMIC_DRAW);
+                    gl.enableVertexAttribArray(particleSizeLocation);
+                    gl.vertexAttribPointer(particleSizeLocation, 1, gl.FLOAT, false, 0, 0);
+
+                    gl.bindBuffer(gl.ARRAY_BUFFER, particleTypeBuffer);
+                    gl.bufferData(gl.ARRAY_BUFFER, types.subarray(0, actualDrawableCount), gl.DYNAMIC_DRAW);
+                    gl.enableVertexAttribArray(particleTypeLocation);
+                    gl.vertexAttribPointer(particleTypeLocation, 1, gl.FLOAT, false, 0, 0);
+
+                    gl.drawArrays(gl.POINTS, 0, actualDrawableCount);
+
+                    gl.disableVertexAttribArray(particlePositionLocation);
+                    gl.disableVertexAttribArray(particleColorLocation);
+                    gl.disableVertexAttribArray(particleSizeLocation);
+                    gl.disableVertexAttribArray(particleTypeLocation);
+                }
+            }
+        }
+
+        function resizeCanvas() {
+            if (!gl) return;
+            const parent = canvas.parentElement;
+            if (!parent) return;
+
+            const displayWidth  = parent.clientWidth;
+            const displayHeight = Math.max(150, parent.clientHeight - (document.getElementById('infoDisplay')?.offsetHeight || 0) - 10);
+
+            if (canvas.width !== displayWidth || canvas.height !== displayHeight) {
+                canvas.width = displayWidth;
+                canvas.height = displayHeight;
+            }
+
+            WORLD_WIDTH = canvas.width;
+            WORLD_HEIGHT = canvas.height;
+            if(worldSizeDisplay) worldSizeDisplay.textContent = `${WORLD_WIDTH}x${WORLD_HEIGHT}`;
+
+            gl.viewport(0, 0, gl.drawingBufferWidth, gl.drawingBufferHeight);
+
+            const currentMaxDist = maxDist > 0 ? maxDist : 80;
+            // Ensure spatialGrid is initialized only if it's needed and dimensions are valid
+            if (WORLD_WIDTH > 0 && WORLD_HEIGHT > 0) {
+                 spatialGrid = new SpatialGrid(WORLD_WIDTH, WORLD_HEIGHT, currentMaxDist);
+                 particles.forEach(p => { if(p.isAlive && spatialGrid) spatialGrid.addParticle(p); });
             }
 
 
-            // 3. Draw Particles and Other World Objects (transformed)
-            ctx.save(); 
-            ctx.translate(W / 2, H / 2); 
-            ctx.scale(camera.zoom, camera.zoom); 
-            ctx.translate(-camera.x, -camera.y); 
-            
-            particles.forEach(p => { if (p.isAlive) p.draw(); });
-            heavyObjects.forEach(well => well.draw());
+            camera.x = Math.max(0, Math.min(WORLD_WIDTH, camera.x));
+            camera.y = Math.max(0, Math.min(WORLD_HEIGHT, camera.y));
 
-            ctx.restore(); 
-            ctx.shadowBlur = 0; ctx.shadowColor = 'transparent';
-        }
-        function resizeCanvas() { 
-            const parent = canvas.parentElement;
-            if (!parent) return; 
-            canvas.width = parent.clientWidth;
-            const infoDisp = document.getElementById('infoDisplay');
-            const infoDispHeight = infoDisp ? infoDisp.offsetHeight : 0;
-            canvas.height = Math.max(150, parent.clientHeight - infoDispHeight - 10); 
-            
-            worldNoiseNeedsUpdate = true; // Force redraw of noise background on resize as aspect ratio might change how it's drawn
+            worldNoiseNeedsUpdate = true; 
 
-            drawScene(); 
-            if (!isPaused && animationFrameId === null) { startAnimationLoop(); } 
-            else if (isPaused && animationFrameId === null) { /* Redraw handled by drawScene() */ }
+            if (isPaused && animationFrameId === null) {
+                drawScene(); 
+            } else if (!isPaused && animationFrameId === null) {
+                startAnimationLoop(); 
+            }
         }
-        window.addEventListener('load', () => { 
+
+        window.addEventListener('load', () => {
+            if (!gl) { 
+                console.error("WebGL context not available. Simulation cannot start.");
+                return;
+            }
+            initializeWebGLShadersAndPrograms();
+
+            if (absorbedByBHCountDisplay) absorbedByBHCountDisplay.textContent = totalAbsorbedByBH;
+
             resizeCanvas(); 
-            setupEventListeners(); 
+
+            setupEventListeners();
             controlConfigurations.forEach(config => {
                 const inputEl = document.getElementById(config.id);
-                const valueDisplayId = config.id.endsWith('Slider') ? config.id.replace('Slider', 'Value') : config.id + 'Value';
-                const valueDisplay = document.getElementById(valueDisplayId);
-
+                const valueDisplay = document.getElementById(config.id.replace("Slider","") + 'Value');
                 if (inputEl) {
                     let val;
                      if (inputEl.type === 'checkbox') val = inputEl.checked;
                      else if (inputEl.tagName === 'SELECT') val = inputEl.value;
                      else if (config.isInt) val = parseInt(inputEl.value);
                      else val = parseFloat(inputEl.value);
-                    config.valueRef(val); 
+                    config.valueRef(val);
                     if (inputEl.type === 'range' && valueDisplay) {
                         valueDisplay.textContent = inputEl.value;
                     }
                 }
             });
-            updateConditionalControls(); 
+            updateConditionalControls();
             resetSimulation(); 
-            showToast("Particle Life V2 Ready!");
+            showToast("Particle Life: WebGL Enhanced & Biome Shader Updated!");
         });
-        window.addEventListener('resize', resizeCanvas); 
+        window.addEventListener('resize', resizeCanvas);
     </script>
 </body>
 </html>

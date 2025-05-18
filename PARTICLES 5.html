@@ -1,0 +1,2441 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Particle Life: WebGL Glow, Dynamic World & More</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            overscroll-behavior: none;
+            margin: 0; /* Ensure no default margin */
+            background-color: #0a0e14; /* Dark background for body */
+        }
+        canvas {
+            display: block;
+            border: 1px solid #374151; /* border-gray-700 */
+            border-radius: 0.5rem; /* rounded-lg */
+            touch-action: none;
+            background-color: #111827; /* Fallback, but WebGL will clear */
+        }
+        .control-panel {
+            background-color: #1f2937;
+            color: #d1d5db;
+            border-radius: 0.5rem;
+            padding: 1rem;
+            overflow-y: auto;
+            position: fixed;
+            right: 1rem;
+            top: 1rem;
+            bottom: 1rem;
+            width: 24rem; /* 384px */
+            transition: transform 0.3s ease-in-out, opacity 0.3s ease-in-out;
+            z-index: 500;
+        }
+        .control-panel.hidden-by-h-key {
+            display: none !important;
+        }
+        .control-panel.minimized-for-fullscreen {
+            transform: translateX(calc(100% - 40px - 1rem));
+            opacity: 0.85;
+        }
+        .control-panel.minimized-for-fullscreen.fully-expanded-in-fullscreen {
+           transform: translateX(0%);
+           opacity: 1;
+        }
+        .control-panel-tab-handle {
+            position: absolute;
+            left: -30px;
+            top: 50%;
+            transform: translateY(-50%);
+            padding: 15px 8px;
+            background-color: #374151;
+            color: #9ca3af;
+            border-top-left-radius: 0.25rem;
+            border-bottom-left-radius: 0.25rem;
+            cursor: pointer;
+            font-size: 1rem;
+            line-height: 1;
+            box-shadow: -2px 0 5px rgba(0,0,0,0.2);
+            display: none;
+        }
+        .control-panel.minimized-for-fullscreen .control-panel-tab-handle {
+            display: block;
+        }
+        .control-panel label, .control-panel h3, .control-panel h4, .control-panel select {
+            color: #9ca3af; /* text-gray-400 */
+        }
+        .control-panel select {
+            background-color: #374151; /* bg-gray-700 */
+            border-radius: 0.25rem; /* rounded */
+            padding: 0.25rem 0.5rem;
+            border-color: #4b5563; /* border-gray-600 */
+        }
+        .control-panel input[type="range"] {
+            -webkit-appearance: none;
+            appearance: none;
+            width: 100%;
+            height: 8px;
+            background: #4b5563; /* bg-gray-600 */
+            outline: none;
+            opacity: 0.7;
+            transition: opacity .15s ease-in-out;
+            border-radius: 4px;
+        }
+        .control-panel input[type="range"]::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            appearance: none;
+            width: 18px;
+            height: 18px;
+            background: #60a5fa; /* bg-blue-400 */
+            cursor: pointer;
+            border-radius: 50%;
+            border: 2px solid #1f2937; /* border-gray-800 */
+        }
+        .control-panel input[type="range"]::-moz-range-thumb {
+            width: 18px;
+            height: 18px;
+            background: #60a5fa; /* bg-blue-400 */
+            cursor: pointer;
+            border-radius: 50%;
+            border: 2px solid #1f2937; /* border-gray-800 */
+        }
+        .control-panel button {
+            background-color: #3b82f6; /* bg-blue-500 */
+            color: white;
+            transition: background-color 0.3s;
+        }
+        .control-panel button:hover {
+            background-color: #2563eb; /* bg-blue-600 */
+        }
+        .control-panel button.secondary {
+            background-color: #4b5563; /* bg-gray-600 */
+        }
+        .control-panel button.secondary:hover {
+            background-color: #6b7280; /* bg-gray-500 */
+        }
+        .rule-grid table {
+            border-collapse: collapse;
+            width: 100%;
+        }
+        .rule-grid th, .rule-grid td {
+            border: 1px solid #4b5563; /* border-gray-600 */
+            padding: 4px;
+            text-align: center;
+            min-width: 30px;
+            height: 30px;
+            cursor: pointer;
+            font-size: 0.8rem;
+        }
+        .rule-grid th {
+            background-color: #374151; /* bg-gray-700 */
+        }
+        .color-picker-button {
+            width: 24px;
+            height: 24px;
+            border: 2px solid transparent;
+            margin: 2px;
+        }
+        .color-picker-button.selected {
+            border-color: #60a5fa; /* border-blue-400 */
+            box-shadow: 0 0 0 2px #60a5fa; /* ring-2 ring-blue-400 */
+        }
+        #toast-message {
+            position: fixed;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            background-color: #1f2937; /* bg-gray-800 */
+            color: white;
+            padding: 10px 20px;
+            border-radius: 0.5rem; /* rounded-lg */
+            box-shadow: 0 2px 10px rgba(0,0,0,0.5);
+            z-index: 1000;
+            opacity: 0;
+            transition: opacity 0.5s ease-in-out, visibility 0.5s ease-in-out;
+            visibility: hidden;
+        }
+        #toast-message.show {
+            opacity: 1;
+            visibility: visible;
+        }
+        .conditional-control {
+            transition: max-height 0.3s ease-out, opacity 0.3s ease-out, margin 0.3s ease-out, padding 0.3s ease-out;
+            overflow: hidden;
+        }
+        .conditional-control.hidden { /* For internal conditional controls */
+             max-height: 0 !important;
+             opacity: 0 !important;
+             margin-top: 0 !important;
+             margin-bottom: 0 !important;
+             padding-top: 0 !important;
+             padding-bottom: 0 !important;
+             visibility: hidden;
+        }
+    </style>
+</head>
+<body class="bg-gray-900 text-gray-200 flex flex-col lg:flex-row p-4 gap-4 h-screen overflow-hidden">
+
+    <div class="flex-grow flex flex-col">
+        <canvas id="particleCanvas" class="flex-grow"></canvas>
+        <div id="infoDisplay" class="text-sm mt-2 p-2 bg-gray-800 rounded-md text-center lg:text-left">
+            Particles: <span id="particleCount">0</span> | FPS: <span id="fpsDisplay">0</span>
+            | BH Absorbed: <span id="absorbedByBHCount">0</span>
+            | World: <span id="worldSizeDisplay">0x0</span>
+        </div>
+    </div>
+
+    <div class="control-panel w-full lg:w-96 p-4 space-y-4 overflow-y-auto max-h-full">
+        <div class="control-panel-tab-handle" title="Toggle Panel">☰</div>
+        <h3 class="text-xl font-semibold border-b border-gray-700 pb-2">Controls</h3>
+        <div>
+            <label for="numParticles" class="block text-sm font-medium">Number of Particles: <span id="numParticlesValue">200</span></label>
+            <input type="range" id="numParticles" min="10" max="5000" value="200" step="10" class="w-full"> </div>
+        <div>
+            <label for="numColors" class="block text-sm font-medium">Number of Colors: <span id="numColorsValue">4</span></label>
+            <input type="range" id="numColors" min="2" max="8" value="4" class="w-full">
+        </div>
+         <div>
+            <label for="particleRadius" class="block text-sm font-medium">Base Particle Radius (px): <span id="particleRadiusValue">2</span></label>
+            <input type="range" id="particleRadius" min="1" max="20" value="2" step="0.5" class="w-full"> </div>
+
+        <h4 class="text-lg font-medium pt-2">Interaction Rules</h4>
+        <div id="ruleEditor" class="rule-grid"></div>
+        <button id="randomizeRulesBtn" class="w-full py-2 px-4 rounded-md text-sm secondary">Randomize Rules</button>
+
+        <h4 class="text-lg font-medium pt-2">Physics Parameters</h4>
+        <div>
+            <label for="forceModel" class="block text-sm font-medium mb-1">Force Model:</label>
+            <select id="forceModel" class="w-full bg-gray-700 border border-gray-600 rounded p-1 text-sm">
+                <option value="inverseR">Inverse R (1/r)</option>
+                <option value="lennardJones">Lennard-Jones Style</option>
+                <option value="constant">Constant Force</option>
+            </select>
+        </div>
+        <div id="ljParamsContainer" class="conditional-control space-y-2 hidden"> <div>
+                <label for="ljEquilibriumDistance" class="block text-sm font-medium">LJ Equilibrium Distance (r₀): <span id="ljEquilibriumDistanceValue">40</span></label>
+                <input type="range" id="ljEquilibriumDistance" min="5" max="100" value="40" step="1" class="w-full">
+            </div>
+        </div>
+        <div>
+            <label for="forceFactor" class="block text-sm font-medium">Base Force Factor: <span id="forceFactorValue">5000</span></label>
+            <input type="range" id="forceFactor" min="100" max="20000" value="5000" step="100" class="w-full">
+        </div>
+        <div>
+            <label for="maxDist" class="block text-sm font-medium">Max Interaction Distance: <span id="maxDistValue">80</span></label>
+            <input type="range" id="maxDist" min="10" max="200" value="80" class="w-full">
+        </div>
+        <div>
+            <label for="viscosity" class="block text-sm font-medium">Base Viscosity (Damping): <span id="viscosityValue">0.02</span></label>
+            <input type="range" id="viscosity" min="0.005" max="0.5" value="0.02" step="0.005" class="w-full">
+        </div>
+        <div>
+            <label for="simulationSpeed" class="block text-sm font-medium">Simulation Speed: <span id="simulationSpeedValue">1</span></label>
+            <input type="range" id="simulationSpeed" min="0.1" max="5" value="1" step="0.1" class="w-full">
+        </div>
+        <div>
+            <label for="maxForce" class="block text-sm font-medium">Max Acceleration: <span id="maxForceValue">1000</span></label>
+            <input type="range"id="maxForce" min="10" max="5000" value="1000" step="10" class="w-full">
+        </div>
+        <div>
+            <label for="boundaryCondition" class="block text-sm font-medium mb-1">Boundary Condition:</label>
+            <select id="boundaryCondition" class="w-full bg-gray-700 border border-gray-600 rounded p-1 text-sm">
+                <option value="bounce">Bounce</option>
+                <option value="wrap">Wrap (Toroidal)</option>
+                <option value="absorb">Absorb (at Edge)</option>
+            </select>
+        </div>
+
+        <h4 class="text-lg font-medium pt-2">Particle Lifecycle & Evolution</h4>
+        <div>
+            <input type="checkbox" id="enableAgeDeath" class="mr-2 rounded">
+            <label for="enableAgeDeath" class="text-sm font-medium">Enable Death by Age</label>
+        </div>
+        <div id="ageParamsContainer" class="conditional-control space-y-2 hidden"> <div>
+                <label for="maxParticleAge" class="block text-sm font-medium">Base Max Particle Age (frames): <span id="maxParticleAgeValue">1000</span></label>
+                <input type="range" id="maxParticleAge" min="100" max="5000" value="1000" step="100" class="w-full">
+            </div>
+        </div>
+        <div>
+            <input type="checkbox" id="enableSplitting" class="mr-2 rounded">
+            <label for="enableSplitting" class="text-sm font-medium">Enable Particle Splitting</label>
+        </div>
+        <div id="splittingParamsContainer" class="conditional-control space-y-2 hidden">
+            <div>
+                <label for="reproductionAgeFactor" class="block text-sm font-medium">Reproduction Age Factor (of Max Age): <span id="reproductionAgeFactorValue">0.8</span></label>
+                <input type="range" id="reproductionAgeFactor" min="0.1" max="1" value="0.8" step="0.05" class="w-full">
+            </div>
+            <div>
+                <label for="reproductionChance" class="block text-sm font-medium">Reproduction Chance: <span id="reproductionChanceValue">0.5</span></label>
+                <input type="range" id="reproductionChance" min="0" max="1" value="0.5" step="0.01" class="w-full">
+            </div>
+            <div>
+                <label for="offspringCount" class="block text-sm font-medium">Offspring Count (1 or 2): <span id="offspringCountValue">1</span></label>
+                <input type="range" id="offspringCount" min="1" max="2" value="1" step="1" class="w-full">
+            </div>
+            <div>
+                <label for="offspringVelocityBoost" class="block text-sm font-medium">Offspring Velocity Boost: <span id="offspringVelocityBoostValue">1.1</span></label>
+                <input type="range" id="offspringVelocityBoost" min="0.5" max="2" value="1.1" step="0.05" class="w-full">
+            </div>
+            <div>
+                <input type="checkbox" id="enableColorMutation" class="mr-2 rounded">
+                <label for="enableColorMutation" class="text-sm font-medium">Enable Color Mutation on Split</label>
+            </div>
+            <div id="mutationParamsContainer" class="conditional-control space-y-2 hidden">
+                <div>
+                    <label for="mutationChance" class="block text-sm font-medium">Trait/Color Mutation Chance: <span id="mutationChanceValue">0.1</span></label>
+                    <input type="range" id="mutationChance" min="0" max="1" value="0.1" step="0.01" class="w-full">
+                </div>
+            </div>
+        </div>
+
+        <h4 class="text-lg font-medium pt-2">Special Behaviors</h4>
+        <div>
+            <input type="checkbox" id="enableAbsorptionExplosion" class="mr-2 rounded">
+            <label for="enableAbsorptionExplosion" class="text-sm font-medium">Enable Energy Absorption/Explosion & Mass/AI</label>
+        </div>
+        <div id="absorptionParamsContainer" class="conditional-control space-y-2 hidden">
+            <div>
+                <label for="energyParticlesPerExplosion" class="block text-sm font-medium">Energy Particles per Explosion: <span id="energyParticlesPerExplosionValue">5</span></label>
+                <input type="range" id="energyParticlesPerExplosion" min="1" max="20" value="5" step="1" class="w-full">
+            </div>
+            <div>
+                <label for="lifeExtensionPerEnergyParticle" class="block text-sm font-medium">Life Extension (frames): <span id="lifeExtensionPerEnergyParticleValue">300</span></label>
+                <input type="range" id="lifeExtensionPerEnergyParticle" min="50" max="1000" value="300" step="50" class="w-full">
+            </div>
+            <div>
+                <label for="energyParticleLifespan" class="block text-sm font-medium">Energy Particle Lifespan (frames): <span id="energyParticleLifespanValue">400</span></label>
+                <input type="range" id="energyParticleLifespan" min="100" max="2000" value="400" step="50" class="w-full">
+            </div>
+            <div>
+                <label for="energyParticleRadius" class="block text-sm font-medium">Energy Particle Radius: <span id="energyParticleRadiusValue">1.5</span></label>
+                <input type="range" id="energyParticleRadius" min="0.5" max="10" value="1.5" step="0.1" class="w-full">
+            </div>
+            <div>
+                <label for="absorptionRadiusFactor" class="block text-sm font-medium">Base Absorption Radius Factor: <span id="absorptionRadiusFactorValue">2.0</span></label>
+                <input type="range" id="absorptionRadiusFactor" min="1.0" max="5.0" value="2.0" step="0.1" class="w-full">
+            </div>
+             <div>
+                <label for="massGainPerEnergy" class="block text-sm font-medium">Mass Gain per Energy Particle: <span id="massGainPerEnergyValue">0.05</span></label>
+                <input type="range" id="massGainPerEnergy" min="0.01" max="0.5" value="0.05" step="0.01" class="w-full">
+            </div>
+            <div>
+                <label for="maxParticleMass" class="block text-sm font-medium">Max Particle Mass: <span id="maxParticleMassValue">5.0</span></label>
+                <input type="range" id="maxParticleMass" min="1.0" max="20.0" value="5.0" step="0.1" class="w-full">
+            </div>
+        </div>
+        <div class="mt-2"> <input type="checkbox" id="enablePredatorPrey" class="mr-2 rounded">
+            <label for="enablePredatorPrey" class="text-sm font-medium">Enable Predator/Prey Dynamics</label>
+        </div>
+        <div id="predatorPreyParamsContainer" class="conditional-control space-y-2 hidden">
+             <div>
+                <label for="lifeGainFromHunt" class="block text-sm font-medium">Life Gain from Hunt (frames): <span id="lifeGainFromHuntValue">250</span></label>
+                <input type="range" id="lifeGainFromHunt" min="50" max="1000" value="250" step="50" class="w-full">
+            </div>
+            <div>
+                <label for="massGainFromHunt" class="block text-sm font-medium">Mass Gain from Hunt: <span id="massGainFromHuntValue">0.25</span></label>
+                <input type="range" id="massGainFromHunt" min="0.05" max="1.0" value="0.25" step="0.05" class="w-full">
+            </div>
+            <div>
+                <label for="predatorSplitChanceOnHunt" class="block text-sm font-medium">Predator Split Chance on Hunt: <span id="predatorSplitChanceOnHuntValue">0.1</span></label>
+                <input type="range" id="predatorSplitChanceOnHunt" min="0" max="1" value="0.1" step="0.01" class="w-full">
+            </div>
+        </div>
+
+
+        <h4 class="text-lg font-medium pt-2">Environmental Factors (Noise Biomes)</h4>
+        <div>
+            <input type="checkbox" id="enableBiomes" class="mr-2 rounded">
+            <label for="enableBiomes" class="text-sm font-medium">Enable Noise Biomes</label>
+        </div>
+        <div id="biomeNoiseParamsContainer" class="conditional-control space-y-2 hidden">
+            <div>
+                <label for="noiseScaleSlider" class="block text-sm font-medium">Noise Scale (lower = larger features): <span id="noiseScaleValue">150</span></label>
+                <input type="range" id="noiseScaleSlider" min="20" max="500" value="150" step="10" class="w-full">
+            </div>
+             <div>
+                <label for="noiseOctavesSlider" class="block text-sm font-medium">Noise Octaves: <span id="noiseOctavesValue">3</span></label>
+                <input type="range" id="noiseOctavesSlider" min="1" max="8" value="3" step="1" class="w-full">
+            </div>
+            <div>
+                <label for="noisePersistenceSlider" class="block text-sm font-medium">Noise Persistence: <span id="noisePersistenceValue">0.45</span></label>
+                <input type="range" id="noisePersistenceSlider" min="0.1" max="1.0" value="0.45" step="0.05" class="w-full">
+            </div>
+            <button id="regenerateNoiseSeedBtn" class="w-full mt-1 py-2 px-4 rounded-md text-sm secondary">Regenerate Noise Seed</button>
+        </div>
+
+        <h4 class="text-lg font-medium pt-2">Gravity Wells (Black Holes)</h4>
+        <div>
+            <input type="checkbox" id="enableGravityWells" class="mr-2 rounded">
+            <label for="enableGravityWells" class="text-sm font-medium">Enable Black Holes</label>
+        </div>
+        <div id="gravityWellParamsContainer" class="conditional-control space-y-2 hidden">
+            <div>
+                <label for="numGravityWells" class="block text-sm font-medium">Number of Black Holes: <span id="numGravityWellsValue">1</span></label>
+                <input type="range" id="numGravityWells" min="0" max="5" value="1" step="1" class="w-full">
+            </div>
+            <div>
+                <label for="gravityWellMass" class="block text-sm font-medium">BH Mass: <span id="gravityWellMassValue">100000</span></label>
+                <input type="range" id="gravityWellMass" min="10000" max="500000" value="100000" step="10000" class="w-full">
+            </div>
+            <div>
+                <label for="gravityConstant" class="block text-sm font-medium">Gravity Constant (G): <span id="gravityConstantValue">0.5</span></label>
+                <input type="range" id="gravityConstant" min="0.01" max="5" value="0.5" step="0.01" class="w-full">
+            </div>
+            <div>
+                <label for="gravityWellRadius" class="block text-sm font-medium">BH Event Horizon Radius (px): <span id="gravityWellRadiusValue">10</span></label>
+                <input type="range" id="gravityWellRadius" min="3" max="50" value="10" step="1" class="w-full">
+            </div>
+            <button id="addGravityWellOnClickBtn" class="w-full mt-1 py-2 px-4 rounded-md text-sm secondary">Add Black Hole at Next Click</button>
+        </div>
+
+
+        <h4 class="text-lg font-medium pt-2">Visuals (WebGL)</h4>
+        <div>
+            <input type="checkbox" id="showTrails" checked class="mr-2 rounded">
+            <label for="showTrails" class="text-sm font-medium">Show Particle Trails</label>
+        </div>
+        <div>
+            <label for="trailOpacity" class="block text-sm font-medium">Trail Opacity (Clear Alpha): <span id="trailOpacityValue">0.1</span></label>
+            <input type="range" id="trailOpacity" min="0.01" max="1.0" value="0.1" step="0.01" class="w-full">
+        </div>
+        <div>
+            <input type="checkbox" id="particleGlow" checked class="mr-2 rounded">
+            <label for="particleGlow" class="text-sm font-medium">Particle Glow</label>
+        </div>
+        <div>
+            <label for="zoomLevel" class="block text-sm font-medium">Zoom Level: <span id="zoomLevelValue">1</span>x</label>
+            <input type="range" id="zoomLevel" min="0.1" max="5" value="1" step="0.1" class="w-full">
+        </div>
+
+        <h4 class="text-lg font-medium pt-2">Simulation Control</h4>
+        <div class="grid grid-cols-3 gap-2">
+            <button id="pauseResumeBtn" class="py-2 px-4 rounded-md text-sm">Pause</button>
+            <button id="stepBtn" class="py-2 px-4 rounded-md text-sm secondary">Step</button>
+            <button id="fullscreenBtn" class="py-2 px-4 rounded-md text-sm secondary">Fullscreen</button>
+        </div>
+        <button id="resetBtn" class="w-full py-2 px-4 rounded-md text-sm bg-red-600 hover:bg-red-700">Reset Simulation</button>
+
+        <h4 class="text-lg font-medium pt-2">Add Particles</h4>
+        <div class="flex items-center space-x-2">
+            <label class="text-sm font-medium">Color:</label>
+            <div id="colorPicker" class="flex flex-wrap"></div>
+        </div>
+        <div class="flex items-center space-x-2 mt-1">
+            <input type="checkbox" id="brushMode" class="mr-2 rounded">
+            <label for="brushMode" class="text-sm font-medium">Brush Mode (Drag to add)</label>
+        </div>
+         <button id="clearParticlesBtn" class="w-full mt-2 py-2 px-4 rounded-md text-sm secondary">Clear All Particles</button>
+    </div>
+
+    <div id="toast-message"></div>
+
+    <script>
+        const canvas = document.getElementById('particleCanvas');
+        // WebGL rendering context
+        const gl = canvas.getContext('webgl', { premultipliedAlpha: false, antialias: true }) || canvas.getContext('experimental-webgl', { premultipliedAlpha: false, antialias: true });
+
+        if (!gl) {
+            alert("WebGL not supported or disabled! This simulation requires WebGL.");
+            canvas.style.display = 'none';
+            document.getElementById('infoDisplay').innerHTML = '<p class="text-red-500 text-center">WebGL is not supported by your browser. The simulation cannot run.</p>';
+            // throw new Error("WebGL context not available."); // Stop execution if gl is not available
+        } else {
+            console.log("WebGL context obtained successfully."); // DEBUG
+        }
+
+        // Shader sources
+        const particleVertexShaderSource = `
+            attribute vec2 a_position;
+            attribute vec3 a_color;
+            attribute float a_size;
+            attribute float a_type; // 0: normal, 1: energy, 2: blackhole core, 3: blackhole disk
+
+            uniform vec2 u_resolution;
+            uniform vec3 u_camera; // x, y, zoom
+
+            varying vec3 v_color;
+            varying float v_size;
+            varying float v_type;
+
+            void main() {
+                vec2 pos = (a_position - u_camera.xy) * u_camera.z;
+                vec2 clipSpace = pos / (u_resolution / 2.0);
+                gl_Position = vec4(clipSpace * vec2(1.0, -1.0), 0.0, 1.0);
+                gl_PointSize = a_size * u_camera.z;
+                v_color = a_color;
+                v_size = a_size * u_camera.z; 
+                v_type = a_type;
+            }
+        `;
+
+        const particleFragmentShaderSource = `
+            precision mediump float;
+            varying vec3 v_color;
+            varying float v_size; 
+            varying float v_type;
+
+            uniform bool u_particleGlow;
+            uniform float u_time; 
+
+            void main() {
+                float dist = distance(gl_PointCoord, vec2(0.5, 0.5)); 
+
+                if (dist > 0.5) {
+                    discard; 
+                }
+
+                vec3 finalColor = v_color;
+                float finalAlpha = 1.0;
+
+                if (v_type == 1.0) { // Energy particle
+                    float pulse = 0.8 + sin(u_time * 0.01 + v_size * 0.1) * 0.2; 
+                    finalColor = vec3(1.0, 1.0, 0.0) * pulse; 
+                    finalAlpha = (0.5 - dist) * 2.0 * pulse; 
+                     if (u_particleGlow) {
+                        float glow = smoothstep(0.5, 0.1, dist) * 0.7 * pulse;
+                        finalColor += glow * vec3(1.0,1.0,0.5); 
+                        finalAlpha = max(finalAlpha, glow * 0.5);
+                    }
+                } else if (v_type == 2.0) { // Blackhole Core
+                    finalColor = vec3(0.0, 0.0, 0.0); // Make it black
+                    finalAlpha = 1.0; 
+                } else if (v_type == 3.0) { // Blackhole Accretion Disk Element
+                    float angle_factor = gl_PointCoord.x * 6.283 + u_time * 0.0005; 
+                    float disk_intensity = 0.3 + sin(angle_factor + v_size * 0.1) * 0.2; 
+                    finalColor = mix(vec3(1.0, 0.8, 0.6), vec3(0.8, 0.7, 1.0), sin(angle_factor*0.5)) * disk_intensity;
+                    finalAlpha = (0.5 - dist) * 1.5 * disk_intensity;
+                } else { // Normal particle
+                    if (u_particleGlow) {
+                        float glowFalloff = smoothstep(0.5, 0.15, dist); 
+                        float glowAmount = glowFalloff * 0.8;          
+                        finalColor += glowAmount * v_color * 1.5;       
+                        finalAlpha = smoothstep(0.5, 0.3, dist) + glowAmount * 0.5; 
+                    } else {
+                        finalAlpha = smoothstep(0.5, 0.45, dist); 
+                    }
+                }
+                gl_FragColor = vec4(finalColor, finalAlpha);
+                // gl_FragColor = vec4(0.0, 1.0, 1.0, 1.0); // DEBUG: Force all particles cyan
+            }
+        `;
+        
+        const backgroundVertexShaderSource = `
+            attribute vec2 a_position;
+            varying vec2 v_texCoord;
+            void main() {
+                v_texCoord = a_position * 0.5 + 0.5; 
+                v_texCoord.y = 1.0 - v_texCoord.y; 
+                gl_Position = vec4(a_position, 0.0, 1.0);
+            }
+        `;
+
+        const backgroundFragmentShaderSource = `
+            precision mediump float;
+            varying vec2 v_texCoord;
+            uniform sampler2D u_texture; 
+
+            void main() {
+                 // DEBUG: Force solid magenta to test if quad is drawing
+                 gl_FragColor = vec4(1.0, 0.0, 1.0, 1.0); // Magenta, Opaque
+                // gl_FragColor = texture2D(u_texture, v_texCoord); // Original
+            }
+        `;
+
+        // WebGL Program and Buffers
+        let particleShaderProgram, backgroundShaderProgram;
+        let particlePositionBuffer, particleColorBuffer, particleSizeBuffer, particleTypeBuffer;
+        let particlePositionLocation, particleColorLocation, particleSizeLocation, particleTypeLocation;
+        let particleResolutionLocation, particleCameraLocation, particleGlowLocation, particleTimeLocation;
+
+        let backgroundPositionBuffer, backgroundPositionLocation, backgroundTextureLocation;
+        let biomeTexture;
+
+        class PerlinNoise {
+            constructor(seed = Math.random()) {
+                this.p = new Uint8Array(512);
+                this.seedValue = seed;
+                this.perm = [];
+                this.grad3 = [ [1,1,0],[-1,1,0],[1,-1,0],[-1,-1,0],
+                               [1,0,1],[-1,0,1],[1,0,-1],[-1,0,-1],
+                               [0,1,1],[0,-1,1],[0,1,-1],[0,-1,-1] ];
+                this.seed(this.seedValue);
+            }
+            seed(s) {
+                this.seedValue = s;
+                let random = () => {
+                    let x = Math.sin(this.seedValue++) * 10000;
+                    return x - Math.floor(x);
+                };
+                for (let i = 0; i < 256; i++) this.p[i] = i;
+                for (let i = 255; i > 0; i--) {
+                    const j = Math.floor(random() * (i + 1));
+                    [this.p[i], this.p[j]] = [this.p[j], this.p[i]];
+                }
+                for (let i = 0; i < 256; i++) {
+                    this.p[i + 256] = this.p[i];
+                    this.perm[i] = this.perm[i+256] = this.p[i];
+                }
+            }
+            fade(t) { return t * t * t * (t * (t * 6 - 15) + 10); }
+            lerp(t, a, b) { return a + t * (b - a); }
+            grad(hash, x, y, z) {
+                const h = hash & 15;
+                const u = h < 8 ? x : y;
+                const v = h < 4 ? y : h === 12 || h === 14 ? x : z;
+                return ((h & 1) === 0 ? u : -u) + ((h & 2) === 0 ? v : -v);
+            }
+            noise(x, y) {
+                const X = Math.floor(x) & 255;
+                const Y = Math.floor(y) & 255;
+                x -= Math.floor(x);
+                y -= Math.floor(y);
+                const u = this.fade(x);
+                const v = this.fade(y);
+                const A = this.p[X] + Y, AA = this.p[A], AB = this.p[A + 1];
+                const B = this.p[X + 1] + Y, BA = this.p[B], BB = this.p[B + 1];
+
+                return this.lerp(v, this.lerp(u, this.grad(this.p[AA], x, y, 0),
+                                                this.grad(this.p[BA], x - 1, y, 0)),
+                                    this.lerp(u, this.grad(this.p[AB], x, y - 1, 0),
+                                                this.grad(this.p[BB], x - 1, y - 1, 0)));
+            }
+            octaveNoise(x, y, octaves = 3, persistence = 0.5) {
+                let total = 0;
+                let frequency = 1;
+                let amplitude = 1;
+                let maxValue = 0;
+
+                for(let i=0; i < octaves; i++) {
+                    total += this.noise(x * frequency, y * frequency) * amplitude;
+                    maxValue += amplitude;
+                    amplitude *= persistence;
+                    frequency *= 2;
+                }
+                return total / maxValue;
+            }
+        }
+
+        let particles = [];
+        let rules = [];
+        let COLORS_HSL = []; 
+        let COLORS_RGB = []; 
+
+        let WORLD_WIDTH = canvas.width;
+        let WORLD_HEIGHT = canvas.height;
+
+        let noiseGenerator;
+        let noiseScale = 150;
+        let noiseSeed = Math.random();
+        let noiseOctaves = 3;
+        let noisePersistence = 0.45;
+        let worldNoiseNeedsUpdate = true;
+        let offscreenNoiseCanvas = null; 
+        let offscreenNoiseCtx = null;
+
+        const BIOME_SETTINGS = { 
+            VOID: {
+                label: "Void",
+                thresholdMax: -0.4,
+                colorFn: (noiseVal, time, worldX, worldY, secondaryNoiseFn) => {
+                    let r = 5 + Math.floor(noiseVal*-10);
+                    let g = 5 + Math.floor(noiseVal*-10);
+                    let b = 10 + Math.floor(noiseVal*-20);
+                    const starCheckX = Math.floor(worldX / 50);
+                    const starCheckY = Math.floor(worldY / 50);
+                    const starHash = (starCheckX * 18397) ^ (starCheckY * 39916801);
+                    if ((starHash % 250) === 0) {
+                       const starBrightness = 50 + (starHash % 50);
+                       r = Math.max(r, starBrightness); g = Math.max(g, starBrightness); b = Math.max(b, starBrightness);
+                    }
+                    return { r, g, b, a: 255 };
+                },
+                effects: { viscosityMultiplier: 0.8, forceFactorMultiplier: 0.9, },
+                spawnWeight: 0
+            },
+            NEBULA: {
+                label: "Nebula",
+                thresholdMin: -0.4,
+                thresholdMax: 0.3,
+                colorFn: (noiseVal, time, worldX, worldY, secondaryNoiseFn) => {
+                    const intensity = (noiseVal - (-0.4)) / (0.3 - (-0.4));
+                    return {
+                        r: Math.floor(30 + intensity * 60 + Math.sin(worldX*0.01 + time*0.0005)*10),
+                        g: Math.floor(20 + intensity * 30 + Math.sin(worldY*0.01 + time*0.0005)*10),
+                        b: Math.floor(50 + intensity * 90 + Math.sin((worldX+worldY)*0.005 + time*0.0005)*15),
+                        a: 80 + Math.floor(intensity * 90)
+                    };
+                },
+                effects: { forceFactorMultiplier: 1.05, },
+                spawnWeight: 5
+            },
+            ASTEROID_FIELD: {
+                label: "Asteroid Field",
+                thresholdMin: 0.3,
+                thresholdMax: 0.7,
+                colorFn: (noiseVal, time, worldX, worldY, secondaryNoiseFn) => {
+                     const intensity = (noiseVal - 0.3) / (0.7 - 0.3);
+                     const texNoise = secondaryNoiseFn(worldX / (noiseScale*0.2), worldY / (noiseScale*0.2)) * 0.5 + 0.5; 
+                     const baseR = 60 + intensity * 20;
+                     const baseG = 55 + intensity * 15;
+                     const baseB = 50 + intensity * 10;
+                    return {
+                        r: Math.floor(baseR * (0.8 + texNoise * 0.2)),
+                        g: Math.floor(baseG * (0.8 + texNoise * 0.2)),
+                        b: Math.floor(baseB * (0.8 + texNoise * 0.2)),
+                        a: 200 + Math.floor(intensity * 55)
+                    };
+                },
+                effects: {
+                    viscosityMultiplier: (noiseVal) => 2.0 + (noiseVal - 0.3) * 7,
+                    forceFactorMultiplier: 0.7,
+                },
+                spawnWeight: 1
+            },
+            RADIATION_ZONE: {
+                label: "Radiation Zone",
+                thresholdMin: 0.7,
+                colorFn: (noiseVal, time, worldX, worldY, secondaryNoiseFn) => {
+                    const phase = Math.sin(time * 0.003 + noiseVal * 10 + worldX * 0.005 + worldY * 0.003) * 0.5 + 0.5;
+                    return {
+                        r: Math.floor(phase * 20 + 10),
+                        g: Math.floor(phase * 130 + 40),
+                        b: Math.floor(phase * 20 + 10),
+                        a: 150 + Math.floor(phase * 50)
+                    };
+                },
+                effects: {
+                    viscosityMultiplier: 1.05,
+                    mutationBoostFactor: 5.0,
+                    colorMutationBoostFactor: 7.0,
+                    agePenalty: 0.08
+                },
+                spawnWeight: 0
+            },
+            DEFAULT_SPACE: {
+                label: "Normal Space",
+                colorFn: (noiseVal, time, worldX, worldY, secondaryNoiseFn) => ({ r: 17, g: 24, b: 39, a: 255 }), 
+                effects: {
+                    viscosityMultiplier: 1.0,
+                    forceFactorMultiplier: 1.0,
+                },
+                spawnWeight: 2
+            }
+        };
+
+        let camera = { x: WORLD_WIDTH / 2, y: WORLD_HEIGHT / 2, zoom: 1 };
+        let numParticles = 200;
+        let particleRadius = 2; 
+        let numColors = 4;
+        let forceFactor = 5000;
+        let maxDist = 80;
+        let viscosity = 0.02;
+        let simulationSpeed = 1;
+        let maxForce = 1000;
+        let forceModel = 'inverseR';
+        let ljEquilibriumDistance = 40;
+        let boundaryCondition = 'bounce';
+        let enableAgeDeath = false;
+        let maxParticleAge = 1000;
+        let enableSplitting = false;
+        let reproductionAgeFactor = 0.8;
+        let reproductionChance = 0.5;
+        let offspringCount = 1;
+        let offspringVelocityBoost = 1.1;
+        let enableColorMutation = false;
+        let mutationChance = 0.1;
+        let heavyObjects = []; 
+        let enableGravityWells = false;
+        let numGravityWells = 1;
+        let gravityWellMass = 100000;
+        let gravityConstant = 0.5;
+        let gravityWellRadius = 10; 
+        let addWellOnClickMode = false;
+        let enableBiomes = false;
+        let settings = { 
+            enableAbsorptionExplosion: false,
+            energyParticlesPerExplosion: 5,
+            lifeExtensionPerEnergyParticle: 300,
+            energyParticleLifespan: 400,
+            energyParticleRadius: 1.5, 
+            absorptionRadiusFactor: 2.0,
+            massGainPerEnergy: 0.05,
+            maxParticleMass: 5.0,
+
+            ENERGY_SEEK_THRESHOLD_AGE_FACTOR: 0.7,
+            FLEE_COOLDOWN: 120,
+            SEEK_COOLDOWN: 60,
+            DANGER_THRESHOLD: -0.5,
+            AI_SEEK_FORCE_MULTIPLIER: 0.5,
+            AI_SIGHT_RADIUS_MULTIPLIER: 1.5,
+
+            enablePredatorPrey: false,
+            lifeGainFromHunt: 250,
+            massGainFromHunt: 0.25,
+            predatorSplitChanceOnHunt: 0.1,
+            HUNTING_COOLDOWN: 90,
+        };
+        let showTrails = true;
+        let trailOpacity = 0.1; 
+        let particleGlow = true;
+        let isPaused = false;
+        let stepMode = false;
+        let selectedColorForAdding = 0;
+        let brushModeActive = false;
+        let isMouseDownForBrush = false;
+        let isPanning = false;
+        let lastPanX = 0, lastPanY = 0;
+        let lastFrameTime = performance.now();
+        let frameCount = 0;
+        let lastFpsUpdateTime = performance.now();
+        const fpsDisplay = document.getElementById('fpsDisplay');
+        const particleCountDisplay = document.getElementById('particleCount');
+        const absorbedByBHCountDisplay = document.getElementById('absorbedByBHCount');
+        const worldSizeDisplay = document.getElementById('worldSizeDisplay');
+        let totalAbsorbedByBH = 0;
+
+        let controlConfigurations = [];
+        let animationFrameId = null;
+        const MAX_TOTAL_PARTICLES = 15000; 
+
+        class SpatialGrid { 
+            constructor(width, height, cellSize) {
+                this.width = width; this.height = height;
+                this.cellSize = cellSize > 0 ? cellSize : 1;
+                this.cols = Math.ceil(width / this.cellSize);
+                this.rows = Math.ceil(height / this.cellSize);
+                this.grid = new Array(this.cols * this.rows).fill(null).map(() => []);
+            }
+            clear() { this.grid.forEach(cell => cell.length = 0); }
+            getCellIndex(x, y) {
+                const col = Math.max(0, Math.min(this.cols - 1, Math.floor(x / this.cellSize)));
+                const row = Math.max(0, Math.min(this.rows - 1, Math.floor(y / this.cellSize)));
+                return row * this.cols + col;
+            }
+            addParticle(particle) {
+                if (!particle || !particle.isAlive) return;
+                const index = this.getCellIndex(particle.x, particle.y);
+                if (this.grid[index]) this.grid[index].push(particle);
+            }
+            getNearbyParticles(particle) {
+                const nearby = [];
+                if (!particle || !particle.isAlive) return nearby;
+                const pCol = Math.floor(particle.x / this.cellSize);
+                const pRow = Math.floor(particle.y / this.cellSize);
+                for (let dRow = -1; dRow <= 1; dRow++) {
+                    for (let dCol = -1; dCol <= 1; dCol++) {
+                        const r = pRow + dRow, c = pCol + dCol;
+                        if (r >= 0 && r < this.rows && c >= 0 && c < this.cols) {
+                            const index = r * this.cols + c;
+                            if (this.grid[index]) nearby.push(...this.grid[index]);
+                        }
+                    }
+                }
+                return nearby;
+            }
+        }
+        let spatialGrid;
+
+        class BlackHole {
+            constructor(x, y, mass, eventHorizonRadius) {
+                this.x = x; this.y = y; this.mass = mass;
+                this.eventHorizonRadius = eventHorizonRadius;
+                this.absorbedParticles = 0;
+                this.lastAbsorbTime = 0;
+                this.pulseIntensity = 0; 
+                this.type = 'blackhole'; 
+            }
+            absorb() {
+                this.absorbedParticles++;
+                this.lastAbsorbTime = performance.now();
+                this.pulseIntensity = 1.0;
+                totalAbsorbedByBH++;
+                if(absorbedByBHCountDisplay) absorbedByBHCountDisplay.textContent = totalAbsorbedByBH;
+            }
+        }
+
+        class Particle { 
+            constructor(x, y, color, type = 'normal', parentTraits = null) {
+                this.x = x; this.y = y; this.colorIndex = color; 
+                this.type = type; 
+                this.isAlive = true; this.age = 0;
+
+                this.individualMaxAge = maxParticleAge;
+                this.individualForceFactor = forceFactor;
+                this.individualAbsorptionRadiusFactor = settings.absorptionRadiusFactor;
+                this.ruleModifiers = {};
+                this.mass = 1.0;
+                this.baseRadius = particleRadius;
+
+                this.state = 'idle';
+                this.stateTicks = 0;
+                this.targetParticle = null;
+
+                this.currentViscosityMultiplier = 1.0;
+                this.currentForceFactorMultiplier = 1.0;
+                this.inRadiationZone = false;
+
+                this.isPredator = false;
+                this.huntsColor = null;
+
+                if (this.type === 'energy') {
+                    this.vx = (Math.random() - 0.5) * 10; this.vy = (Math.random() - 0.5) * 10;
+                    this.radius = settings.energyParticleRadius; 
+                    this.energyValue = settings.lifeExtensionPerEnergyParticle;
+                    this.maxAge = settings.energyParticleLifespan;
+                } else {
+                    this.vx = (Math.random() - 0.5) * 40; this.vy = (Math.random() - 0.5) * 40;
+                    this.radius = this.baseRadius + (Math.random() - 0.5) * (this.baseRadius * 0.25);
+
+                    if (parentTraits) {
+                        this.individualMaxAge = parentTraits.individualMaxAge;
+                        this.individualForceFactor = parentTraits.individualForceFactor;
+                        this.individualAbsorptionRadiusFactor = parentTraits.individualAbsorptionRadiusFactor;
+                        this.baseRadius = parentTraits.baseRadius;
+                        this.mass = parentTraits.mass / Math.max(1, offspringCount);
+                        this.ruleModifiers = { ...parentTraits.ruleModifiers };
+                        this.isPredator = parentTraits.isPredator;
+                        this.huntsColor = parentTraits.huntsColor;
+                        this.inRadiationZone = parentTraits.inRadiationZone;
+
+                        let traitMutationDynamicChance = mutationChance;
+                        if (this.inRadiationZone && settings.enableAbsorptionExplosion) {
+                            const radBiomeEffects = BIOME_SETTINGS.RADIATION_ZONE.effects;
+                            if (radBiomeEffects.mutationBoostFactor) {
+                                traitMutationDynamicChance = Math.min(1.0, mutationChance * radBiomeEffects.mutationBoostFactor);
+                            }
+                        }
+                        const MUTATION_STRENGTH_AGE = 50;
+                        const MUTATION_STRENGTH_FORCE = 100;
+                        const MUTATION_STRENGTH_ABSORPTION = 0.1;
+                        const MUTATION_STRENGTH_RULE = 0.05;
+                        const MUTATION_STRENGTH_BASERADIUS = 0.2;
+
+                        if (Math.random() < traitMutationDynamicChance) {
+                            this.individualMaxAge += (Math.random() * 2 - 1) * MUTATION_STRENGTH_AGE;
+                            this.individualMaxAge = Math.max(100, this.individualMaxAge);
+                        }
+                        if (Math.random() < traitMutationDynamicChance) {
+                            this.individualForceFactor += (Math.random() * 2 - 1) * MUTATION_STRENGTH_FORCE;
+                            this.individualForceFactor = Math.max(100, this.individualForceFactor);
+                        }
+                        if (Math.random() < traitMutationDynamicChance) {
+                            this.individualAbsorptionRadiusFactor += (Math.random() * 2 - 1) * MUTATION_STRENGTH_ABSORPTION;
+                            this.individualAbsorptionRadiusFactor = Math.max(1.0, this.individualAbsorptionRadiusFactor);
+                        }
+                         if (Math.random() < traitMutationDynamicChance) {
+                            this.baseRadius += (Math.random() * 2 - 1) * MUTATION_STRENGTH_BASERADIUS;
+                            this.baseRadius = Math.max(0.5, this.baseRadius);
+                        }
+                        if (Math.random() < traitMutationDynamicChance && numColors > 0) {
+                            const targetColorToMutate = Math.floor(Math.random() * numColors);
+                            const currentModifier = this.ruleModifiers[targetColorToMutate] || 0;
+                            this.ruleModifiers[targetColorToMutate] = currentModifier + (Math.random() * 2 - 1) * MUTATION_STRENGTH_RULE;
+                            this.ruleModifiers[targetColorToMutate] = Math.max(-0.5, Math.min(0.5, this.ruleModifiers[targetColorToMutate]));
+                        }
+                        if (settings.enablePredatorPrey) {
+                            if (Math.random() < traitMutationDynamicChance) {
+                                this.isPredator = !this.isPredator;
+                            }
+                            if (this.isPredator && Math.random() < traitMutationDynamicChance && numColors > 1) {
+                                let newHuntsColor = Math.floor(Math.random() * numColors);
+                                while (newHuntsColor === this.colorIndex && numColors > 1) {
+                                    newHuntsColor = Math.floor(Math.random() * numColors);
+                                }
+                                this.huntsColor = newHuntsColor;
+                            }
+                            if (!this.isPredator) this.huntsColor = null;
+                        }
+                    } else {
+                        if (settings.enablePredatorPrey && Math.random() < 0.05 && numColors > 1) {
+                            this.isPredator = true;
+                            this.huntsColor = Math.floor(Math.random() * numColors);
+                            while (this.huntsColor === this.colorIndex && numColors > 1) {
+                                this.huntsColor = Math.floor(Math.random() * numColors);
+                            }
+                        }
+                    }
+                    this.radius = this.baseRadius * Math.sqrt(this.mass);
+                    this.radius = Math.max(1, this.radius);
+                }
+            }
+
+            explode() { 
+                if (this.type !== 'normal' || !this.isAlive) return [];
+                this.isAlive = false;
+                let createdEnergyParticles = [];
+                const numToSpawn = settings.energyParticlesPerExplosion;
+                for (let i = 0; i < numToSpawn; i++) {
+                    if (particles.length + createdEnergyParticles.length >= MAX_TOTAL_PARTICLES) break;
+                    const angle = Math.random() * Math.PI * 2;
+                    const speed = (Math.random() * 0.5 + 0.5) * 25;
+                    const ep = new Particle(this.x, this.y, 0, 'energy'); 
+                    ep.vx = this.vx * 0.1 + Math.cos(angle) * speed;
+                    ep.vy = this.vy * 0.1 + Math.sin(angle) * speed;
+                    createdEnergyParticles.push(ep);
+                }
+                return createdEnergyParticles;
+            }
+            absorb(energyParticle) { 
+                if (this.type !== 'normal' || energyParticle.type !== 'energy' || !this.isAlive || !energyParticle.isAlive) return;
+                this.age = Math.max(0, this.age - energyParticle.energyValue);
+                energyParticle.isAlive = false;
+                if (settings.enableAbsorptionExplosion) {
+                    this.mass += settings.massGainPerEnergy;
+                    this.mass = Math.min(this.mass, settings.maxParticleMass);
+                    this.radius = this.baseRadius * Math.sqrt(this.mass); 
+                    this.radius = Math.max(1, this.radius);
+                }
+            }
+            split() { 
+                let newOffspring = [];
+                const actualOffspringCount = Math.max(1, offspringCount);
+                const parentTraitsForOffspring = {
+                    individualMaxAge: this.individualMaxAge,
+                    individualForceFactor: this.individualForceFactor,
+                    individualAbsorptionRadiusFactor: this.individualAbsorptionRadiusFactor,
+                    mass: this.mass,
+                    ruleModifiers: this.ruleModifiers,
+                    baseRadius: this.baseRadius,
+                    isPredator: this.isPredator,
+                    huntsColor: this.huntsColor,
+                    inRadiationZone: this.inRadiationZone
+                };
+                for (let i = 0; i < actualOffspringCount; i++) {
+                    if (particles.length + newOffspring.length >= MAX_TOTAL_PARTICLES) break;
+                    const offspringX = this.x + (Math.random() - 0.5) * this.radius * 4;
+                    const offspringY = this.y + (Math.random() - 0.5) * this.radius * 4;
+
+                    let offspringColorIndex = this.colorIndex;
+                    let colorMutDynamicChance = mutationChance;
+                     if (this.inRadiationZone && settings.enableAbsorptionExplosion) {
+                        const radBiomeEffects = BIOME_SETTINGS.RADIATION_ZONE.effects;
+                         if (radBiomeEffects.colorMutationBoostFactor) {
+                            colorMutDynamicChance = Math.min(1.0, mutationChance * radBiomeEffects.colorMutationBoostFactor);
+                        }
+                    }
+
+                    if (enableColorMutation && Math.random() < colorMutDynamicChance) {
+                        if (numColors > 1) {
+                            let newColorIndex = this.colorIndex;
+                            while (newColorIndex === this.colorIndex) {
+                                newColorIndex = Math.floor(Math.random() * numColors);
+                            }
+                            offspringColorIndex = newColorIndex;
+                        }
+                    }
+                    const offspring = new Particle(
+                        offspringX, offspringY, offspringColorIndex, 'normal', parentTraitsForOffspring
+                    );
+                    offspring.vx = this.vx * offspringVelocityBoost * (Math.random() * 0.4 + 0.8);
+                    offspring.vy = this.vy * offspringVelocityBoost * (Math.random() * 0.4 + 0.8);
+                    newOffspring.push(offspring);
+                }
+                this.isAlive = false;
+                return newOffspring;
+            }
+            applyBiomeEffects() { 
+                this.currentViscosityMultiplier = 1.0;
+                this.currentForceFactorMultiplier = 1.0;
+                this.inRadiationZone = false;
+
+                if (!enableBiomes || this.type === 'energy' || !noiseGenerator) {
+                    return;
+                }
+
+                const noiseVal = noiseGenerator.octaveNoise(this.x / noiseScale, this.y / noiseScale, noiseOctaves, noisePersistence);
+                let activeBiome = BIOME_SETTINGS.DEFAULT_SPACE;
+
+                for (const biomeKey in BIOME_SETTINGS) {
+                    if (biomeKey === 'DEFAULT_SPACE') continue;
+                    const biome = BIOME_SETTINGS[biomeKey];
+                    const matchesMin = biome.thresholdMin === undefined || noiseVal >= biome.thresholdMin;
+                    const matchesMax = biome.thresholdMax === undefined || noiseVal < biome.thresholdMax;
+
+                    if (matchesMin && matchesMax) {
+                        activeBiome = biome;
+                        break;
+                    }
+                }
+
+                if (activeBiome.effects) {
+                    if (activeBiome.effects.viscosityMultiplier !== undefined) {
+                        this.currentViscosityMultiplier = typeof activeBiome.effects.viscosityMultiplier === 'function' ?
+                            activeBiome.effects.viscosityMultiplier(noiseVal) : activeBiome.effects.viscosityMultiplier;
+                    }
+                    if (activeBiome.effects.forceFactorMultiplier !== undefined) {
+                        this.currentForceFactorMultiplier = typeof activeBiome.effects.forceFactorMultiplier === 'function' ?
+                            activeBiome.effects.forceFactorMultiplier(noiseVal) : activeBiome.effects.forceFactorMultiplier;
+                    }
+                    if (activeBiome.label === "Radiation Zone") {
+                         this.inRadiationZone = true;
+                         if (settings.enableAbsorptionExplosion && activeBiome.effects.agePenalty) {
+                             this.age += activeBiome.effects.agePenalty;
+                         }
+                    }
+                }
+            }
+            executeBehavior(dt, allParticles) { 
+                 if (!this.isAlive || this.type !== 'normal' ) return;
+
+                const AI_SEEK_FORCE = settings.AI_SEEK_FORCE_MULTIPLIER * this.individualForceFactor;
+                const AI_SIGHT_RADIUS = maxDist * settings.AI_SIGHT_RADIUS_MULTIPLIER;
+                const nearbyParticlesToSearch = spatialGrid ? spatialGrid.getNearbyParticles(this) : allParticles;
+
+
+                if (this.state === 'seeking_energy' && settings.enableAbsorptionExplosion) {
+                    if (!this.targetParticle || !this.targetParticle.isAlive) {
+                        let closestEnergy = null;
+                        let minDistSq = AI_SIGHT_RADIUS * AI_SIGHT_RADIUS;
+                        for (const p of nearbyParticlesToSearch) {
+                            if (p === this || !p.isAlive) continue;
+                            if (p.type === 'energy') {
+                                const dx = p.x - this.x; const dy = p.y - this.y;
+                                const dSq = dx * dx + dy * dy;
+                                if (dSq < minDistSq) { minDistSq = dSq; closestEnergy = p; }
+                            }
+                        }
+                        this.targetParticle = closestEnergy;
+                        if (!this.targetParticle) { this.state = 'idle'; this.stateTicks = 0; }
+                    }
+                    if (this.targetParticle && this.targetParticle.isAlive) {
+                        const dx = this.targetParticle.x - this.x; const dy = this.targetParticle.y - this.y;
+                        const dist = Math.sqrt(dx * dx + dy * dy);
+                        if (dist > 0.1) {
+                            const moveX = (dx / dist) * AI_SEEK_FORCE / this.mass;
+                            const moveY = (dy / dist) * AI_SEEK_FORCE / this.mass;
+                            this.vx += moveX * dt * simulationSpeed; this.vy += moveY * dt * simulationSpeed;
+                        }
+                    } else { this.state = 'was_seeking'; this.targetParticle = null; this.stateTicks = 0; }
+                } else if (this.state === 'fleeing' && settings.enableAbsorptionExplosion) {
+                    if (this.targetParticle && this.targetParticle.isAlive) {
+                        const dx = this.x - this.targetParticle.x; const dy = this.y - this.targetParticle.y;
+                        const dist = Math.sqrt(dx * dx + dy * dy);
+                        if (dist > 0.1 && dist < AI_SIGHT_RADIUS) {
+                            const moveX = (dx / dist) * AI_SEEK_FORCE / this.mass;
+                            const moveY = (dy / dist) * AI_SEEK_FORCE / this.mass;
+                            this.vx += moveX * dt * simulationSpeed; this.vy += moveY * dt * simulationSpeed;
+                        } else { this.state = 'was_fleeing'; this.targetParticle = null; this.stateTicks = 0; }
+                    } else { this.state = 'idle'; this.targetParticle = null; this.stateTicks = 0; }
+                } else if (this.state === 'hunting' && settings.enablePredatorPrey) {
+                     if (!this.targetParticle || !this.targetParticle.isAlive || this.targetParticle.colorIndex !== this.huntsColor) {
+                        let closestPrey = null;
+                        let minDistSq = AI_SIGHT_RADIUS * AI_SIGHT_RADIUS;
+                        for (const p of nearbyParticlesToSearch) {
+                            if (p === this || !p.isAlive) continue;
+                            if (p.type === 'normal' && p.colorIndex === this.huntsColor && !p.isPredator) {
+                                const dx = p.x - this.x;
+                                const dy = p.y - this.y;
+                                const dSq = dx * dx + dy * dy;
+                                if (dSq < minDistSq) {
+                                    minDistSq = dSq;
+                                    closestPrey = p;
+                                }
+                            }
+                        }
+                        this.targetParticle = closestPrey;
+                        if (!this.targetParticle) {
+                            this.state = 'idle';
+                            this.stateTicks = 0;
+                        }
+                    }
+                    if (this.targetParticle && this.targetParticle.isAlive) {
+                        const dx = this.targetParticle.x - this.x;
+                        const dy = this.targetParticle.y - this.y;
+                        const dist = Math.sqrt(dx * dx + dy * dy);
+                        if (dist > this.radius + this.targetParticle.radius) {
+                            const moveX = (dx / dist) * AI_SEEK_FORCE / this.mass;
+                            const moveY = (dy / dist) * AI_SEEK_FORCE / this.mass;
+                            this.vx += moveX * dt * simulationSpeed;
+                            this.vy += moveY * dt * simulationSpeed;
+                        }
+                    } else {
+                        this.state = 'was_hunting';
+                        this.targetParticle = null;
+                        this.stateTicks = 0;
+                    }
+                }
+            }
+            update(dt, allParticles) { 
+                if (!this.isAlive) return { newParticlesFromSplit: null, shouldExplode: false };
+                if (this.type === 'normal') { this.applyBiomeEffects(); }
+                this.age++;
+                let newParticlesFromSplit = null;
+                let shouldExplodeFlag = false;
+
+                if (this.type === 'normal') {
+                    this.stateTicks++;
+                    if (settings.enableAbsorptionExplosion) {
+                        if (this.age > this.individualMaxAge * settings.ENERGY_SEEK_THRESHOLD_AGE_FACTOR &&
+                            this.state !== 'seeking_energy' && this.state !== 'fleeing' && this.state !== 'hunting' &&
+                            (this.state !== 'was_seeking' || this.stateTicks > settings.SEEK_COOLDOWN)) {
+                            this.state = 'seeking_energy'; this.targetParticle = null; this.stateTicks = 0;
+                        } else if (this.state === 'seeking_energy' && this.targetParticle && !this.targetParticle.isAlive) {
+                            this.state = 'was_seeking'; this.targetParticle = null; this.stateTicks = 0;
+                        } else if (this.state === 'seeking_energy' && this.age < this.individualMaxAge * 0.3) {
+                            this.state = 'idle'; this.targetParticle = null; this.stateTicks = 0;
+                        } else if ((this.state === 'was_seeking' && this.stateTicks > settings.SEEK_COOLDOWN) ||
+                                   (this.state === 'was_fleeing' && this.stateTicks > settings.FLEE_COOLDOWN) ||
+                                   (this.state === 'was_hunting' && this.stateTicks > settings.HUNTING_COOLDOWN)
+                                  ) {
+                            this.state = 'idle'; this.stateTicks = 0;
+                        }
+                    }
+                    if (settings.enablePredatorPrey && this.isPredator && this.huntsColor !== null &&
+                        (this.state === 'idle' || (this.state === 'was_hunting' && this.stateTicks > settings.HUNTING_COOLDOWN)) &&
+                        this.state !== 'fleeing' && this.state !== 'seeking_energy'
+                        ) {
+                        this.state = 'hunting';
+                        this.targetParticle = null;
+                        this.stateTicks = 0;
+                    }
+
+                    this.executeBehavior(dt, allParticles);
+                    if (enableSplitting && this.age >= this.individualMaxAge * reproductionAgeFactor && this.age < this.individualMaxAge) {
+                        if (Math.random() < reproductionChance) {
+                            newParticlesFromSplit = this.split();
+                            return { newParticlesFromSplit, shouldExplode: false };
+                        }
+                    }
+                    if (enableAgeDeath && this.age > this.individualMaxAge) {
+                        if (settings.enableAbsorptionExplosion) {
+                            shouldExplodeFlag = true;
+                        } else {
+                            this.isAlive = false;
+                        }
+                    }
+                } else if (this.type === 'energy') {
+                    if (this.age > this.maxAge) {
+                        this.isAlive = false;
+                    }
+                }
+                const currentEffectiveViscosity = this.type === 'normal' ? (viscosity * this.currentViscosityMultiplier) : viscosity;
+                this.vx *= (1 - currentEffectiveViscosity); this.vy *= (1 - currentEffectiveViscosity);
+                this.x += this.vx * dt * simulationSpeed; this.y += this.vy * dt * simulationSpeed;
+                const bounceFactor = -0.7;
+                const worldLeft = 0, worldRight = WORLD_WIDTH, worldTop = 0, worldBottom = WORLD_HEIGHT;
+                switch (boundaryCondition) {
+                    case 'bounce':
+                        if (this.x < this.radius + worldLeft) { this.x = this.radius + worldLeft; this.vx *= bounceFactor; }
+                        if (this.x > worldRight - this.radius) { this.x = worldRight - this.radius; this.vx *= bounceFactor; }
+                        if (this.y < this.radius + worldTop) { this.y = this.radius + worldTop; this.vy *= bounceFactor; }
+                        if (this.y > worldBottom - this.radius) { this.y = worldBottom - this.radius; this.vy *= bounceFactor; }
+                        break;
+                    case 'wrap':
+                        if (this.x < worldLeft - this.radius) this.x = worldRight + this.radius;
+                        else if (this.x > worldRight + this.radius) this.x = worldLeft - this.radius;
+                        if (this.y < worldTop - this.radius) this.y = worldBottom + this.radius;
+                        else if (this.y > worldBottom + this.radius) this.y = worldTop - this.radius;
+                        break;
+                    case 'absorb':
+                        if (this.x < worldLeft - this.radius*2 || this.x > worldRight + this.radius*2 ||
+                            this.y < worldTop - this.radius*2 || this.y > worldBottom + this.radius*2) {
+                            this.isAlive = false;
+                        }
+                        break;
+                }
+                return { newParticlesFromSplit, shouldExplode: shouldExplodeFlag };
+            }
+            interact(otherParticle, ruleValue, dt) { 
+                if (!this.isAlive || !otherParticle.isAlive || this.type === 'energy' || otherParticle.type === 'energy') return;
+                const dx = otherParticle.x - this.x; const dy = otherParticle.y - this.y;
+                const distSq = dx * dx + dy * dy;
+                const r1 = this.radius > 0 ? this.radius : 1; const r2 = otherParticle.radius > 0 ? otherParticle.radius : 1;
+                const effectiveMaxDist = maxDist + r1 + r2;
+                if (distSq > 0.0001 && distSq < effectiveMaxDist * effectiveMaxDist) {
+                    const dist = Math.sqrt(distSq);
+                    let accelerationStrength; let currentRuleValue = ruleValue;
+                    if (this.ruleModifiers[otherParticle.colorIndex] !== undefined) {
+                        currentRuleValue += this.ruleModifiers[otherParticle.colorIndex];
+                    }
+                    currentRuleValue = Math.max(-1.0, Math.min(1.0, currentRuleValue));
+                    const effectiveForceFactor = this.individualForceFactor * this.currentForceFactorMultiplier;
+                    switch (forceModel) {
+                        case 'lennardJones':
+                            const r0 = ljEquilibriumDistance > 0 ? ljEquilibriumDistance : 1;
+                            if (dist < 0.1 * r0) {
+                                accelerationStrength = currentRuleValue * effectiveForceFactor * (Math.pow(r0 / (0.1*r0), 13));
+                                if (currentRuleValue < 0 ) accelerationStrength *= -1;
+                            } else {
+                                const term_repulsive = Math.pow(r0 / dist, 13);
+                                const term_attractive = Math.pow(r0 / dist, 7);
+                                accelerationStrength = currentRuleValue * effectiveForceFactor * (term_repulsive - term_attractive);
+                            }
+                            break;
+                        case 'constant': accelerationStrength = currentRuleValue * effectiveForceFactor; break;
+                        case 'inverseR': default:
+                            accelerationStrength = currentRuleValue * effectiveForceFactor;
+                            if (dist > 1) { accelerationStrength /= dist; } break;
+                    }
+                    let ax = (accelerationStrength * dx / dist) / this.mass;
+                    let ay = (accelerationStrength * dy / dist) / this.mass;
+                    const totalAccelerationMag = Math.sqrt(ax * ax + ay * ay);
+                    if (totalAccelerationMag > maxForce) {
+                        const scale = maxForce / totalAccelerationMag; ax *= scale; ay *= scale;
+                    }
+                    this.vx += ax * dt * simulationSpeed; this.vy += ay * dt * simulationSpeed;
+                    if (settings.enableAbsorptionExplosion && this.type === 'normal' && otherParticle.type === 'normal') {
+                        if (currentRuleValue < settings.DANGER_THRESHOLD &&
+                            this.state !== 'fleeing' &&
+                            (this.state !== 'was_fleeing' || this.stateTicks > settings.FLEE_COOLDOWN)) {
+                            this.state = 'fleeing'; this.targetParticle = otherParticle; this.stateTicks = 0;
+                        }
+                    }
+                }
+            }
+        }
+
+        function createShader(gl, type, source) {
+            if (!gl) { console.error("createShader: gl context is null!"); return null;}
+            const shader = gl.createShader(type);
+            gl.shaderSource(shader, source);
+            gl.compileShader(shader);
+            if (!gl.getShaderParameter(shader, gl.COMPILE_STATUS)) {
+                console.error(`Error compiling ${type === gl.VERTEX_SHADER ? 'vertex' : 'fragment'} shader:`, gl.getShaderInfoLog(shader));
+                gl.deleteShader(shader);
+                return null;
+            }
+            return shader;
+        }
+
+        function createProgram(gl, vertexShader, fragmentShader) {
+            if (!gl) { console.error("createProgram: gl context is null!"); return null;}
+            if (!vertexShader || !fragmentShader) {
+                console.error("createProgram: shaders are invalid.", {vertexShader, fragmentShader});
+                return null;
+            }
+            const program = gl.createProgram();
+            gl.attachShader(program, vertexShader);
+            gl.attachShader(program, fragmentShader);
+            gl.linkProgram(program);
+            if (!gl.getProgramParameter(program, gl.LINK_STATUS)) {
+                console.error('Error linking program:', gl.getProgramInfoLog(program));
+                gl.deleteProgram(program);
+                return null;
+            }
+            return program;
+        }
+
+        function initializeWebGLShadersAndPrograms() {
+            if (!gl) {
+                console.error("initializeWebGLShadersAndPrograms: gl context is null!");
+                return;
+            }
+            console.log("Initializing WebGL Shaders and Programs..."); // DEBUG
+
+            // Particle Shader Program
+            const pVertexShader = createShader(gl, gl.VERTEX_SHADER, particleVertexShaderSource);
+            const pFragmentShader = createShader(gl, gl.FRAGMENT_SHADER, particleFragmentShaderSource);
+            particleShaderProgram = createProgram(gl, pVertexShader, pFragmentShader);
+            console.log("Particle Shader Program created:", particleShaderProgram ? "Success" : "Failed"); // DEBUG
+
+            if (particleShaderProgram) {
+                particlePositionLocation = gl.getAttribLocation(particleShaderProgram, 'a_position');
+                particleColorLocation = gl.getAttribLocation(particleShaderProgram, 'a_color');
+                particleSizeLocation = gl.getAttribLocation(particleShaderProgram, 'a_size');
+                particleTypeLocation = gl.getAttribLocation(particleShaderProgram, 'a_type');
+                particleResolutionLocation = gl.getUniformLocation(particleShaderProgram, 'u_resolution');
+                particleCameraLocation = gl.getUniformLocation(particleShaderProgram, 'u_camera');
+                particleGlowLocation = gl.getUniformLocation(particleShaderProgram, 'u_particleGlow');
+                particleTimeLocation = gl.getUniformLocation(particleShaderProgram, 'u_time');
+                console.log("Particle Shader Locations:", { // DEBUG
+                    pos: particlePositionLocation, color: particleColorLocation, size: particleSizeLocation, type: particleTypeLocation,
+                    res: particleResolutionLocation, cam: particleCameraLocation, glow: particleGlowLocation, time: particleTimeLocation
+                });
+            }
+
+            // Background Shader Program
+            const bgVertexShader = createShader(gl, gl.VERTEX_SHADER, backgroundVertexShaderSource);
+            const bgFragmentShader = createShader(gl, gl.FRAGMENT_SHADER, backgroundFragmentShaderSource);
+            backgroundShaderProgram = createProgram(gl, bgVertexShader, bgFragmentShader);
+            console.log("Background Shader Program created:", backgroundShaderProgram ? "Success" : "Failed"); // DEBUG
+            
+            if (backgroundShaderProgram) {
+                backgroundPositionLocation = gl.getAttribLocation(backgroundShaderProgram, 'a_position');
+                backgroundTextureLocation = gl.getUniformLocation(backgroundShaderProgram, 'u_texture');
+                 console.log("Background Shader Locations:", { // DEBUG
+                    pos: backgroundPositionLocation, tex: backgroundTextureLocation
+                });
+            }
+
+            particlePositionBuffer = gl.createBuffer();
+            particleColorBuffer = gl.createBuffer();
+            particleSizeBuffer = gl.createBuffer();
+            particleTypeBuffer = gl.createBuffer();
+
+            backgroundPositionBuffer = gl.createBuffer();
+            gl.bindBuffer(gl.ARRAY_BUFFER, backgroundPositionBuffer);
+            const positions = [-1, -1, 1, -1, -1, 1, -1, 1, 1, -1, 1, 1]; 
+            gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(positions), gl.STATIC_DRAW);
+
+            biomeTexture = gl.createTexture();
+            gl.bindTexture(gl.TEXTURE_2D, biomeTexture);
+            gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+            gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+            gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR); 
+            gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+            console.log("WebGL buffers and biomeTexture initialized."); // DEBUG
+        }
+
+        function toggleFullScreen() { 
+            if (!document.fullscreenElement) {
+                document.documentElement.requestFullscreen().catch(err => {
+                    alert(`Error attempting to enable full-screen mode: ${err.message} (${err.name})`);
+                });
+            } else {
+                if (document.exitFullscreen) {
+                    document.exitFullscreen();
+                }
+            }
+        }
+        function toggleSidebarVisibility() { 
+            const controlPanel = document.querySelector('.control-panel');
+            if (controlPanel) {
+                const isHiddenByHKey = controlPanel.classList.contains('hidden-by-h-key');
+
+                if (isHiddenByHKey) {
+                    controlPanel.classList.remove('hidden-by-h-key');
+                    controlPanel.classList.remove('minimized-for-fullscreen');
+                    controlPanel.classList.remove('fully-expanded-in-fullscreen');
+                    controlPanel.removeAttribute('data-minimized-by-fullscreen');
+                    showToast("Sidebar Shown");
+                } else {
+                    controlPanel.classList.add('hidden-by-h-key');
+                    controlPanel.classList.remove('minimized-for-fullscreen');
+                    controlPanel.classList.remove('fully-expanded-in-fullscreen');
+                    controlPanel.removeAttribute('data-minimized-by-fullscreen');
+                    showToast("Sidebar Hidden (Press 'h' to show)");
+                }
+                setTimeout(resizeCanvas, 50); 
+            }
+        }
+        function startAnimationLoop() {
+            if (animationFrameId === null && gl) { 
+                lastFrameTime = performance.now();
+                animationFrameId = requestAnimationFrame(animationLoop);
+            }
+        }
+        function stopAnimationLoop() {
+             if (animationFrameId !== null) {
+                cancelAnimationFrame(animationFrameId);
+                animationFrameId = null;
+            }
+        }
+
+        function initializeOffscreenNoiseCanvas() { 
+            if (!offscreenNoiseCanvas) {
+                offscreenNoiseCanvas = document.createElement('canvas');
+                offscreenNoiseCtx = offscreenNoiseCanvas.getContext('2d');
+                console.log("Offscreen noise canvas CREATED."); // DEBUG
+            }
+            if (WORLD_WIDTH <= 0 || WORLD_HEIGHT <= 0) {
+                console.warn("initializeOffscreenNoiseCanvas: WORLD_WIDTH or WORLD_HEIGHT is zero or negative.", {WORLD_WIDTH, WORLD_HEIGHT}); // DEBUG
+                return; // Avoid creating 0-size canvas
+            }
+            if (offscreenNoiseCanvas.width !== WORLD_WIDTH || offscreenNoiseCanvas.height !== WORLD_HEIGHT) {
+                offscreenNoiseCanvas.width = WORLD_WIDTH;
+                offscreenNoiseCanvas.height = WORLD_HEIGHT;
+                worldNoiseNeedsUpdate = true;
+                console.log("Offscreen noise canvas RESIZED to:", WORLD_WIDTH, WORLD_HEIGHT); // DEBUG
+            }
+        }
+        function updateWorldNoiseTexture() { 
+            console.log("updateWorldNoiseTexture called. enableBiomes:", enableBiomes); // DEBUG
+            if (!enableBiomes || !noiseGenerator || !gl) {
+                console.log("updateWorldNoiseTexture: Bailing early (enableBiomes, noiseGenerator, or gl missing)."); // DEBUG
+                return;
+            }
+            initializeOffscreenNoiseCanvas(); 
+            if (!offscreenNoiseCtx || offscreenNoiseCanvas.width <= 0 || offscreenNoiseCanvas.height <= 0) {
+                 console.warn("updateWorldNoiseTexture: offscreenNoiseCtx is null or canvas dimensions are invalid. Skipping texture update.", {
+                    w: offscreenNoiseCanvas ? offscreenNoiseCanvas.width : 'N/A',
+                    h: offscreenNoiseCanvas ? offscreenNoiseCanvas.height : 'N/A'
+                }); // DEBUG
+                return;
+            }
+
+
+            const imageData = offscreenNoiseCtx.createImageData(offscreenNoiseCanvas.width, offscreenNoiseCanvas.height);
+            const data = imageData.data;
+            const time = performance.now();
+            const secondaryNoiseFn = (x,y) => noiseGenerator.noise(x,y);
+            let firstPixelAlpha = -1; // DEBUG
+
+            for (let wy = 0; wy < offscreenNoiseCanvas.height; wy++) {
+                for (let wx = 0; wx < offscreenNoiseCanvas.width; wx++) {
+                    const noiseVal = noiseGenerator.octaveNoise(wx / noiseScale, wy / noiseScale, noiseOctaves, noisePersistence);
+                    let activeBiome = BIOME_SETTINGS.DEFAULT_SPACE;
+
+                    for (const biomeKey in BIOME_SETTINGS) {
+                        if (biomeKey === 'DEFAULT_SPACE') continue;
+                        const biome = BIOME_SETTINGS[biomeKey];
+                        const matchesMin = biome.thresholdMin === undefined || noiseVal >= biome.thresholdMin;
+                        const matchesMax = biome.thresholdMax === undefined || noiseVal < biome.thresholdMax;
+                        if (matchesMin && matchesMax) {
+                            activeBiome = biome;
+                            break;
+                        }
+                    }
+                    const colorData = activeBiome.colorFn(noiseVal, time, wx, wy, secondaryNoiseFn);
+                    const idx = (wy * offscreenNoiseCanvas.width + wx) * 4;
+                    data[idx] = colorData.r; data[idx+1] = colorData.g; data[idx+2] = colorData.b; data[idx+3] = colorData.a;
+                    if (wx === 0 && wy === 0) firstPixelAlpha = colorData.a; // DEBUG
+                }
+            }
+            console.log("updateWorldNoiseTexture: First pixel alpha for biome texture:", firstPixelAlpha); // DEBUG
+            offscreenNoiseCtx.putImageData(imageData, 0, 0);
+
+            gl.bindTexture(gl.TEXTURE_2D, biomeTexture);
+            gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, offscreenNoiseCanvas);
+            const texError = gl.getError(); // DEBUG
+            if (texError !== gl.NO_ERROR) {
+                console.error("WebGL Error after texImage2D for biomeTexture:", texError); // DEBUG
+            } else {
+                console.log("Biome texture updated in WebGL successfully."); // DEBUG
+            }
+            worldNoiseNeedsUpdate = false;
+        }
+
+        function initializeBiomes() {
+            console.log("initializeBiomes called. enableBiomes:", enableBiomes); // DEBUG
+            if (enableBiomes) {
+                if (!noiseGenerator) {
+                    noiseGenerator = new PerlinNoise(noiseSeed);
+                     console.log("Noise generator CREATED."); // DEBUG
+                } else {
+                    noiseGenerator.seed(noiseSeed);
+                    console.log("Noise generator SEEDED."); // DEBUG
+                }
+                worldNoiseNeedsUpdate = true; 
+                showToast("Noise-based biomes initialized.");
+            } else {
+                showToast("Biomes Disabled.");
+            }
+            updateConditionalControls();
+        }
+
+        function hslToRgb(h, s, l) {
+            s /= 100; l /= 100;
+            const k = n => (n + h / 30) % 12;
+            const a = s * Math.min(l, 1 - l);
+            const f = n =>
+                l - a * Math.max(-1, Math.min(k(n) - 3, Math.min(9 - k(n), 1)));
+            return [f(0), f(8), f(4)];
+        }
+
+        function generateColors(count) {
+            COLORS_HSL = [];
+            COLORS_RGB = [];
+            for (let i = 0; i < count; i++) {
+                const hue = (i * 360 / count) % 360;
+                COLORS_HSL.push(`hsl(${hue}, 100%, 70%)`);
+                COLORS_RGB.push(hslToRgb(hue, 100, 70));
+            }
+            updateColorPicker();
+        }
+
+        function initializeRules() { 
+            rules = [];
+            for (let i = 0; i < numColors; i++) {
+                rules[i] = [];
+                for (let j = 0; j < numColors; j++) {
+                    rules[i][j] = (Math.random() * 2 - 1) * 0.2;
+                }
+            }
+            buildRuleEditor();
+        }
+        function createParticles() {
+            particles = [];
+            for (let i = 0; i < numParticles; i++) {
+                const x = Math.random() * WORLD_WIDTH;
+                const y = Math.random() * WORLD_HEIGHT;
+                const color = Math.floor(Math.random() * numColors);
+                particles.push(new Particle(x, y, color, 'normal'));
+            }
+            if(particleCountDisplay) particleCountDisplay.textContent = particles.length;
+        }
+        function createGravityWells() { 
+            heavyObjects = [];
+            if (!enableGravityWells || numGravityWells <= 0) return;
+            for (let i = 0; i < numGravityWells; i++) {
+                const x = Math.random() * WORLD_WIDTH;
+                const y = Math.random() * WORLD_HEIGHT;
+                heavyObjects.push(new BlackHole(x, y, gravityWellMass, gravityWellRadius));
+            }
+            totalAbsorbedByBH = 0;
+            if(absorbedByBHCountDisplay) absorbedByBHCountDisplay.textContent = totalAbsorbedByBH;
+        }
+        function updateConditionalControls() { 
+            const getEl = id => document.getElementById(id);
+            const setHidden = (el, hide) => el ? (hide ? el.classList.add('hidden') : el.classList.remove('hidden')) : null;
+
+            setHidden(getEl('ljParamsContainer'), forceModel !== 'lennardJones');
+            setHidden(getEl('ageParamsContainer'), !enableAgeDeath);
+            setHidden(getEl('splittingParamsContainer'), !enableSplitting);
+            setHidden(getEl('mutationParamsContainer'), !(enableSplitting && (enableColorMutation || mutationChance > 0)));
+            setHidden(getEl('gravityWellParamsContainer'), !enableGravityWells);
+            setHidden(getEl('absorptionParamsContainer'), !settings.enableAbsorptionExplosion);
+            setHidden(getEl('predatorPreyParamsContainer'), !settings.enablePredatorPrey);
+            setHidden(getEl('biomeNoiseParamsContainer'), !enableBiomes);
+        }
+        function resetSimulation() {
+            if (!gl) { console.error("resetSimulation: gl context is null!"); return; }
+            console.log("Resetting simulation..."); // DEBUG
+            isPaused = false;
+            lastFrameTime = performance.now(); // Reset lastFrameTime
+            const pauseButton = document.getElementById('pauseResumeBtn');
+            if(pauseButton) pauseButton.textContent = 'Pause';
+
+            controlConfigurations.forEach(config => {
+                 const inputElement = document.getElementById(config.id);
+                 if (inputElement) {
+                     let val;
+                     if (inputElement.type === 'checkbox') val = inputElement.checked;
+                     else if (config.isInt) val = parseInt(inputElement.value);
+                     else if (inputElement.type === 'range' || inputElement.type === 'number') val = parseFloat(inputElement.value);
+                     else if (inputElement.tagName === 'SELECT') val = inputElement.value;
+                     else val = inputElement.value;
+                     config.valueRef(val); // This will set enableBiomes if it's the biome checkbox
+                 }
+            });
+            updateConditionalControls(); // Ensure this uses the new enableBiomes state
+            generateColors(numColors);
+            initializeRules();
+            initializeBiomes();  // This should now correctly use the updated enableBiomes flag
+            createParticles();
+            createGravityWells();
+            totalAbsorbedByBH = 0;
+            if(absorbedByBHCountDisplay) absorbedByBHCountDisplay.textContent = totalAbsorbedByBH;
+
+            const currentMaxDist = maxDist > 0 ? maxDist : 80;
+             if (WORLD_WIDTH > 0 && WORLD_HEIGHT > 0) { // Check for valid dimensions
+                spatialGrid = new SpatialGrid(WORLD_WIDTH, WORLD_HEIGHT, currentMaxDist);
+                if (spatialGrid) {
+                    spatialGrid.clear();
+                    particles.forEach(p => { if(p.isAlive) spatialGrid.addParticle(p); });
+                }
+            } else {
+                console.warn("resetSimulation: WORLD_WIDTH or WORLD_HEIGHT is zero or negative, spatialGrid not fully initialized."); // DEBUG
+            }
+
+           camera.x = WORLD_WIDTH / 2; camera.y = WORLD_HEIGHT / 2;
+           const zoomSlider = document.getElementById('zoomLevel');
+           const zoomValueDisplay = document.getElementById('zoomLevelValue');
+           if (zoomSlider) zoomSlider.value = camera.zoom;
+           if (zoomValueDisplay) zoomValueDisplay.textContent = camera.zoom.toFixed(2);
+
+           worldNoiseNeedsUpdate = true; 
+           showToast("Simulation Reset & Running!");
+           stopAnimationLoop(); startAnimationLoop();
+       }
+       function getMousePos(event) { 
+           const rect = canvas.getBoundingClientRect();
+           let clientX, clientY;
+           if (event.touches && event.touches.length > 0) {
+               clientX = event.touches[0].clientX; clientY = event.touches[0].clientY;
+           } else if (event.clientX !== undefined) {
+               clientX = event.clientX; clientY = event.clientY;
+           } else { return { x: camera.x, y: camera.y }; } 
+
+           const canvasMouseX = clientX - rect.left;
+           const canvasMouseY = clientY - rect.top;
+
+           const worldX = (canvasMouseX - WORLD_WIDTH / 2) / camera.zoom + camera.x;
+           const worldY = (canvasMouseY - WORLD_HEIGHT / 2) / camera.zoom + camera.y;
+           
+           return { x: worldX, y: worldY };
+       }
+        function buildRuleEditor() { 
+            const editorDiv = document.getElementById('ruleEditor');
+            if (!editorDiv) return;
+            editorDiv.innerHTML = '';
+            const table = document.createElement('table'); const tbody = document.createElement('tbody');
+            const headerRow = document.createElement('tr'); const thEmpty = document.createElement('th');
+            headerRow.appendChild(thEmpty);
+            for (let j = 0; j < numColors; j++) {
+                const th = document.createElement('th');
+                th.style.backgroundColor = COLORS_HSL[j % COLORS_HSL.length]; 
+                th.style.width = '20px'; th.style.height = '20px';
+                headerRow.appendChild(th);
+            }
+            tbody.appendChild(headerRow);
+            for (let i = 0; i < numColors; i++) {
+                const row = document.createElement('tr');
+                const thRow = document.createElement('th');
+                thRow.style.backgroundColor = COLORS_HSL[i % COLORS_HSL.length]; 
+                thRow.style.width = '20px'; thRow.style.height = '20px';
+                row.appendChild(thRow);
+                for (let j = 0; j < numColors; j++) {
+                    const cell = document.createElement('td');
+                    const ruleValue = (rules[i] && typeof rules[i][j] !== 'undefined') ? rules[i][j] : 0;
+                    cell.textContent = ruleValue.toFixed(2);
+                    cell.dataset.row = i; cell.dataset.col = j;
+                    if (ruleValue > 0) cell.style.color = '#6ee7b7';
+                    else if (ruleValue < 0) cell.style.color = '#f87171';
+                    else cell.style.color = '#9ca3af';
+                    cell.addEventListener('click', () => {
+                        const cycleValues = [-1.0, -0.5, -0.2, 0, 0.2, 0.5, 1.0];
+                        let currentRuleVal = (rules[i] && typeof rules[i][j] !== 'undefined') ? rules[i][j] : 0;
+                        currentRuleVal = parseFloat(currentRuleVal.toFixed(2));
+                        let currentIndex = cycleValues.findIndex(v => Math.abs(v - currentRuleVal) < 0.001);
+                        if (currentIndex === -1) currentIndex = cycleValues.indexOf(0);
+                        rules[i][j] = cycleValues[(currentIndex + 1) % cycleValues.length];
+                        cell.textContent = rules[i][j].toFixed(2);
+                         if (rules[i][j] > 0) cell.style.color = '#6ee7b7';
+                         else if (rules[i][j] < 0) cell.style.color = '#f87171';
+                         else cell.style.color = '#9ca3af';
+                    });
+                    row.appendChild(cell);
+                }
+                tbody.appendChild(row);
+            }
+            table.appendChild(tbody); editorDiv.appendChild(table);
+        }
+        function updateColorPicker() { 
+            const pickerDiv = document.getElementById('colorPicker');
+            if (!pickerDiv) return;
+            pickerDiv.innerHTML = '';
+            COLORS_HSL.forEach((color, index) => { 
+                const button = document.createElement('button');
+                button.classList.add('color-picker-button', 'rounded-full');
+                button.style.backgroundColor = color;
+                if (index === selectedColorForAdding) button.classList.add('selected');
+                button.addEventListener('click', () => {
+                    selectedColorForAdding = index; updateColorPicker();
+                });
+                pickerDiv.appendChild(button);
+            });
+        }
+        let noiseParamDebounceTimer = null;
+        function handleNoiseParamChange(paramName, valueSetter, value, isInt = false) { 
+            valueSetter(isInt ? parseInt(value) : parseFloat(value));
+
+            const valueDisplay = document.getElementById(paramName + 'Value');
+            if (valueDisplay) valueDisplay.textContent = value;
+
+            clearTimeout(noiseParamDebounceTimer);
+            noiseParamDebounceTimer = setTimeout(() => {
+                worldNoiseNeedsUpdate = true;
+                if (isPaused && animationFrameId === null && enableBiomes && gl) { 
+                    drawScene();
+                }
+            }, 250);
+        }
+        function setupEventListeners() { 
+             controlConfigurations = [
+                { id: 'numParticles', isInt: true, resetOnChange: true, valueRef: (val) => numParticles = val },
+                { id: 'numColors', isInt: true, resetOnChange: true, valueRef: (val) => numColors = val },
+                { id: 'particleRadius', isInt: false, resetOnChange: false, valueRef: (val) => {
+                    particleRadius = val;
+                }},
+                { id: 'forceFactor', isInt: false, resetOnChange: false, valueRef: (val) => forceFactor = val },
+                { id: 'maxDist', isInt: false, resetOnChange: false, valueRef: (val) => {
+                    maxDist = val; const cMaxDist = maxDist > 0 ? maxDist : 80;
+                    if (spatialGrid && WORLD_WIDTH > 0 && WORLD_HEIGHT > 0) {
+                        spatialGrid = new SpatialGrid(WORLD_WIDTH, WORLD_HEIGHT, cMaxDist);
+                    }
+                }},
+                { id: 'viscosity', isInt: false, resetOnChange: false, valueRef: (val) => viscosity = val },
+                { id: 'simulationSpeed', isInt: false, resetOnChange: false, valueRef: (val) => simulationSpeed = val },
+                { id: 'maxForce', isInt: false, resetOnChange: false, valueRef: (val) => maxForce = val },
+                { id: 'forceModel', type: 'select', resetOnChange: false, valueRef: (val) => { forceModel = val; updateConditionalControls(); } },
+                { id: 'ljEquilibriumDistance', isInt: false, resetOnChange: false, valueRef: (val) => ljEquilibriumDistance = val },
+                { id: 'boundaryCondition', type: 'select', resetOnChange: false, valueRef: (val) => boundaryCondition = val },
+                { id: 'enableAgeDeath', type: 'checkbox', resetOnChange: false, valueRef: (val) => { enableAgeDeath = val; updateConditionalControls(); } },
+                { id: 'maxParticleAge', isInt: true, resetOnChange: false, valueRef: (val) => maxParticleAge = val },
+                { id: 'enableSplitting', type: 'checkbox', resetOnChange: false, valueRef: (val) => { enableSplitting = val; updateConditionalControls(); } },
+                { id: 'reproductionAgeFactor', isInt: false, resetOnChange: false, valueRef: (val) => reproductionAgeFactor = val },
+                { id: 'reproductionChance', isInt: false, resetOnChange: false, valueRef: (val) => reproductionChance = val },
+                { id: 'offspringCount', isInt: true, resetOnChange: false, valueRef: (val) => offspringCount = val },
+                { id: 'offspringVelocityBoost', isInt: false, resetOnChange: false, valueRef: (val) => offspringVelocityBoost = val },
+                { id: 'enableColorMutation', type: 'checkbox', resetOnChange: false, valueRef: (val) => { enableColorMutation = val; updateConditionalControls(); } },
+                { id: 'mutationChance', isInt: false, resetOnChange: false, valueRef: (val) => mutationChance = val },
+                { id: 'enableAbsorptionExplosion', type: 'checkbox', resetOnChange: false, valueRef: (val) => { settings.enableAbsorptionExplosion = val; updateConditionalControls(); } },
+                { id: 'energyParticlesPerExplosion', isInt: true, resetOnChange: false, valueRef: (val) => settings.energyParticlesPerExplosion = val },
+                { id: 'lifeExtensionPerEnergyParticle', isInt: true, resetOnChange: false, valueRef: (val) => settings.lifeExtensionPerEnergyParticle = val },
+                { id: 'energyParticleLifespan', isInt: true, resetOnChange: false, valueRef: (val) => settings.energyParticleLifespan = val },
+                { id: 'energyParticleRadius', isInt: false, resetOnChange: false, valueRef: (val) => settings.energyParticleRadius = val },
+                { id: 'absorptionRadiusFactor', isInt: false, resetOnChange: false, valueRef: (val) => settings.absorptionRadiusFactor = val },
+                { id: 'massGainPerEnergy', isInt: false, resetOnChange: false, valueRef: (val) => settings.massGainPerEnergy = val },
+                { id: 'maxParticleMass', isInt: false, resetOnChange: false, valueRef: (val) => settings.maxParticleMass = val },
+                { id: 'enablePredatorPrey', type: 'checkbox', resetOnChange: false, valueRef: (val) => { settings.enablePredatorPrey = val; updateConditionalControls(); } },
+                { id: 'lifeGainFromHunt', isInt: true, resetOnChange: false, valueRef: (val) => settings.lifeGainFromHunt = val },
+                { id: 'massGainFromHunt', isInt: false, resetOnChange: false, valueRef: (val) => settings.massGainFromHunt = val },
+                { id: 'predatorSplitChanceOnHunt', isInt: false, resetOnChange: false, valueRef: (val) => settings.predatorSplitChanceOnHunt = val },
+
+                { id: 'enableBiomes', type: 'checkbox', resetOnChange: true, valueRef: (val) => {
+                    enableBiomes = val; // This is the crucial part for reset
+                    console.log("Biome checkbox changed. enableBiomes is now:", enableBiomes); // DEBUG
+                    initializeBiomes(); 
+                } },
+                { id: 'noiseScaleSlider', isNoiseParam: true, isInt: false, valueRef: (val) => noiseScale = val },
+                { id: 'noiseOctavesSlider', isNoiseParam: true, isInt: true, valueRef: (val) => noiseOctaves = val },
+                { id: 'noisePersistenceSlider', isNoiseParam: true, isInt: false, valueRef: (val) => noisePersistence = val },
+
+                { id: 'enableGravityWells', type: 'checkbox', resetOnChange: true, valueRef: (val) => { enableGravityWells = val; updateConditionalControls(); createGravityWells(); } },
+                { id: 'numGravityWells', isInt: true, resetOnChange: true, valueRef: (val) => { numGravityWells = val; createGravityWells(); } },
+                { id: 'gravityWellMass', isInt: false, resetOnChange: false, valueRef: (val) => { gravityWellMass = val; if(heavyObjects.length>0) heavyObjects.forEach(h => h.mass = val); } },
+                { id: 'gravityConstant', isInt: false, resetOnChange: false, valueRef: (val) => gravityConstant = val },
+                { id: 'gravityWellRadius', isInt: false, resetOnChange: false, valueRef: (val) => { gravityWellRadius = val; if(heavyObjects.length>0) heavyObjects.forEach(h => h.eventHorizonRadius = val); } },
+                { id: 'zoomLevel', isInt: false, resetOnChange: false, valueRef: (val) => camera.zoom = val},
+                { id: 'trailOpacity', isInt: false, resetOnChange: false, valueRef: (val) => trailOpacity = val },
+            ];
+            controlConfigurations.forEach(config => {
+                const input = document.getElementById(config.id);
+                const valueDisplay = document.getElementById(config.id.replace("Slider","") + 'Value');
+
+                if(!input) { console.warn("Control element not found:", config.id); return; }
+                const eventType = (input.type === 'checkbox' || input.tagName === 'SELECT') ? 'change' : 'input';
+
+                if (config.isNoiseParam) {
+                    input.addEventListener(eventType, function() {
+                        handleNoiseParamChange.call(this, config.id.replace("Slider",""), config.valueRef, this.value, config.isInt);
+                    });
+                } else {
+                    input.addEventListener(eventType, () => {
+                        let val;
+                        if (input.type === 'checkbox') val = input.checked;
+                        else if (input.tagName === 'SELECT') val = input.value;
+                        else if (config.isInt) val = parseInt(input.value);
+                        else val = parseFloat(input.value);
+
+                        if (valueDisplay && input.type === 'range') valueDisplay.textContent = input.value;
+                        config.valueRef(val); // This will call the valueRef for 'enableBiomes' immediately on change
+                        if (config.resetOnChange && !isPaused) resetSimulation();
+                    });
+                }
+                if (valueDisplay && input.type === 'range') valueDisplay.textContent = input.value;
+            });
+
+            const panelTabHandle = document.querySelector('.control-panel-tab-handle');
+            if (panelTabHandle) { 
+                panelTabHandle.addEventListener('click', () => {
+                    const controlPanel = document.querySelector('.control-panel');
+                    if (controlPanel && controlPanel.classList.contains('minimized-for-fullscreen') && document.fullscreenElement) {
+                        controlPanel.classList.toggle('fully-expanded-in-fullscreen');
+                    }
+                });
+            }
+            document.getElementById('showTrails')?.addEventListener('change', (e) => {showTrails = e.target.checked; });
+            document.getElementById('particleGlow')?.addEventListener('change', (e) => particleGlow = e.target.checked);
+            document.getElementById('zoomLevel')?.addEventListener('input', (event) => {
+                camera.zoom = parseFloat(event.target.value);
+                const display = document.getElementById('zoomLevelValue');
+                if(display) display.textContent = `${camera.zoom.toFixed(2)}`;
+                if (isPaused && animationFrameId === null && gl) drawScene();
+            });
+            document.getElementById('brushMode')?.addEventListener('change', (e) => {
+                brushModeActive = e.target.checked;
+                if (brushModeActive) {
+                    isPanning = false; canvas.style.cursor = 'crosshair';
+                } else { canvas.style.cursor = addWellOnClickMode ? 'crosshair' : 'grab'; }
+            });
+            document.getElementById('randomizeRulesBtn')?.addEventListener('click', () => { initializeRules(); showToast("Rules Randomized"); });
+            document.getElementById('pauseResumeBtn')?.addEventListener('click', () => {
+                isPaused = !isPaused; stepMode = false;
+                const button = document.getElementById('pauseResumeBtn');
+                if (button) button.textContent = isPaused ? 'Resume' : 'Pause';
+                if (isPaused) stopAnimationLoop(); else startAnimationLoop();
+            });
+            document.getElementById('stepBtn')?.addEventListener('click', () => {
+                isPaused = true; stepMode = true;
+                const pauseButton = document.getElementById('pauseResumeBtn');
+                if (pauseButton) pauseButton.textContent = 'Resume';
+                stopAnimationLoop();
+                if (gl) animationFrameId = requestAnimationFrame(animationLoop); 
+            });
+            document.getElementById('fullscreenBtn')?.addEventListener('click', toggleFullScreen);
+            document.getElementById('resetBtn')?.addEventListener('click', resetSimulation);
+            document.getElementById('clearParticlesBtn')?.addEventListener('click', () => {
+                particles = []; if (spatialGrid) spatialGrid.clear();
+                if(particleCountDisplay) particleCountDisplay.textContent = particles.length;
+                showToast("All particles cleared");
+            });
+            document.getElementById('addGravityWellOnClickBtn')?.addEventListener('click', () => {
+                if (!enableGravityWells) { showToast("Enable Black Holes first!"); return; }
+                addWellOnClickMode = true; isPanning = false; brushModeActive = false;
+                const brushCheckbox = document.getElementById('brushMode');
+                if(brushCheckbox) brushCheckbox.checked = false;
+                canvas.style.cursor = 'crosshair';
+                showToast("Click on canvas to add a Black Hole.");
+            });
+             document.getElementById('regenerateNoiseSeedBtn')?.addEventListener('click', () => {
+                noiseSeed = Math.random();
+                if (noiseGenerator) noiseGenerator.seed(noiseSeed);
+                worldNoiseNeedsUpdate = true;
+                showToast("Noise seed regenerated.");
+                if (isPaused && animationFrameId === null && enableBiomes && gl) drawScene();
+            });
+            canvas.addEventListener('mousedown', (event) => {
+                if (event.button === 0) { 
+                    if (brushModeActive) {
+                        isMouseDownForBrush = true; const { x, y } = getMousePos(event);
+                        addParticleAt(x, y, event.type);
+                    } else if (addWellOnClickMode) { /* Handled by click */ }
+                    else { 
+                        isPanning = true;
+                        lastPanX = event.clientX;
+                        lastPanY = event.clientY;
+                        canvas.style.cursor = 'grabbing';
+                    }
+                }
+            });
+            canvas.addEventListener('mousemove', (event) => {
+                if (isPanning) {
+                    const dx = event.clientX - lastPanX; const dy = event.clientY - lastPanY;
+                    lastPanX = event.clientX; lastPanY = event.clientY;
+                    camera.x -= dx / camera.zoom;
+                    camera.y -= dy / camera.zoom;
+                    if (isPaused && animationFrameId === null && gl) drawScene();
+                    event.preventDefault();
+                } else if (brushModeActive && isMouseDownForBrush) {
+                    const { x, y } = getMousePos(event); addParticleAt(x, y, event.type);
+                }
+            });
+            window.addEventListener('mouseup', (event) => { 
+                if (event.button === 0) {
+                    if (isPanning) { isPanning = false; canvas.style.cursor = brushModeActive ? 'crosshair' : (addWellOnClickMode ? 'crosshair' : 'grab'); }
+                    if (isMouseDownForBrush) isMouseDownForBrush = false;
+                }
+            });
+            canvas.addEventListener('click', (event) => {
+                if (isPanning || (brushModeActive && event.type === "click" && isMouseDownForBrush)) return; 
+                const { x, y } = getMousePos(event);
+                if (addWellOnClickMode && enableGravityWells) {
+                    if (heavyObjects.length < parseInt(document.getElementById('numGravityWells').max)) {
+                        heavyObjects.push(new BlackHole(x, y, gravityWellMass, gravityWellRadius));
+                        showToast(`Black Hole added at (${Math.round(x)}, ${Math.round(y)})`);
+                        if (heavyObjects.length >= numGravityWells) {
+                             addWellOnClickMode = false; canvas.style.cursor = brushModeActive ? 'crosshair' : 'grab';
+                        }
+                    } else {
+                        showToast('Max number of Black Holes for current setting reached.');
+                        addWellOnClickMode = false; canvas.style.cursor = brushModeActive ? 'crosshair' : 'grab';
+                    } return;
+                }
+                if (!brushModeActive && !addWellOnClickMode) { addParticleAt(x, y, event.type); }
+            });
+            canvas.addEventListener('wheel', (event) => {
+                event.preventDefault();
+                const rect = canvas.getBoundingClientRect();
+                const mouseX_canvas = event.clientX - rect.left; const mouseY_canvas = event.clientY - rect.top;
+
+                const worldX_before = (mouseX_canvas - WORLD_WIDTH / 2) / camera.zoom + camera.x;
+                const worldY_before = (mouseY_canvas - WORLD_HEIGHT / 2) / camera.zoom + camera.y;
+
+                const zoomIntensity = 0.1; const wheelDelta = event.deltaY < 0 ? 1 : -1;
+                camera.zoom = Math.max(0.1, Math.min(5.0, camera.zoom * Math.exp(wheelDelta * zoomIntensity)));
+
+                camera.x = worldX_before - (mouseX_canvas - WORLD_WIDTH / 2) / camera.zoom;
+                camera.y = worldY_before - (mouseY_canvas - WORLD_HEIGHT / 2) / camera.zoom;
+
+                const zoomSlider = document.getElementById('zoomLevel');
+                const zoomValueDisplay = document.getElementById('zoomLevelValue');
+                if (zoomSlider) zoomSlider.value = camera.zoom;
+                if (zoomValueDisplay) zoomValueDisplay.textContent = camera.zoom.toFixed(2);
+                if (isPaused && animationFrameId === null && gl) drawScene();
+            }, { passive: false });
+            canvas.addEventListener('touchstart', (e) => { 
+                 if (brushModeActive) {
+                    isMouseDownForBrush = true;
+                    const touch = e.touches[0];
+                    if (touch) { const { x, y } = getMousePos(touch); addParticleAt(x, y, e.type); }
+                    e.preventDefault();
+                } else if (!addWellOnClickMode && e.touches.length === 1) {
+                    isPanning = true; lastPanX = e.touches[0].clientX; lastPanY = e.touches[0].clientY;
+                    e.preventDefault();
+                }
+            }, { passive: false });
+            canvas.addEventListener('touchmove', (e) => { 
+                if (isPanning && e.touches.length === 1) {
+                    const touch = e.touches[0];
+                    const dx = touch.clientX - lastPanX; const dy = touch.clientY - lastPanY;
+                    lastPanX = touch.clientX; lastPanY = touch.clientY;
+                    camera.x -= dx / camera.zoom; camera.y -= dy / camera.zoom;
+                    if (isPaused && animationFrameId === null && gl) drawScene();
+                    e.preventDefault();
+                } else if (brushModeActive && isMouseDownForBrush) {
+                     const touch = e.touches[0];
+                     if (touch) { const { x, y } = getMousePos(touch); addParticleAt(x, y, e.type); }
+                    e.preventDefault();
+                }
+            }, { passive: false });
+            canvas.addEventListener('touchend', (e) => { 
+                if (isPanning) isPanning = false;
+                if (isMouseDownForBrush) isMouseDownForBrush = false;
+            });
+            window.addEventListener('keydown', (event) => { 
+                if (event.key.toLowerCase() === 'h' && !(event.target instanceof HTMLInputElement) && !(event.target instanceof HTMLSelectElement) && !(event.target instanceof HTMLTextAreaElement)) {
+                    toggleSidebarVisibility();
+                }
+            });
+            document.addEventListener('fullscreenchange', () => { 
+                const fullscreenBtn = document.getElementById('fullscreenBtn');
+                const controlPanel = document.querySelector('.control-panel');
+
+                if (document.fullscreenElement) {
+                    if (fullscreenBtn) fullscreenBtn.textContent = 'Exit Fullscreen';
+                    if (controlPanel && !controlPanel.classList.contains('hidden-by-h-key')) {
+                        controlPanel.classList.add('minimized-for-fullscreen');
+                        controlPanel.dataset.minimizedByFullscreen = 'true';
+                    }
+                } else {
+                    if (fullscreenBtn) fullscreenBtn.textContent = 'Fullscreen';
+                    if (controlPanel) {
+                        if (controlPanel.dataset.minimizedByFullscreen === 'true') {
+                            controlPanel.classList.remove('minimized-for-fullscreen');
+                            controlPanel.classList.remove('fully-expanded-in-fullscreen');
+                        }
+                        controlPanel.removeAttribute('data-minimized-by-fullscreen');
+                    }
+                }
+                setTimeout(resizeCanvas, 150); 
+            });
+        }
+        function addParticleAt(x, y, eventType) {
+             if (x >= 0 && x <= WORLD_WIDTH && y >= 0 && y <= WORLD_HEIGHT) {
+                if (particles.filter(p => p.isAlive).length < MAX_TOTAL_PARTICLES) {
+                    const newP = new Particle(x, y, selectedColorForAdding, 'normal');
+                    particles.push(newP);
+                    if(spatialGrid && newP.isAlive) spatialGrid.addParticle(newP);
+                    if(particleCountDisplay) particleCountDisplay.textContent = particles.filter(p => p.isAlive).length;
+                } else {
+                    if (eventType === 'click' || eventType === 'mousedown' || eventType === 'touchstart') {
+                        showToast(`Max particle limit (${MAX_TOTAL_PARTICLES}) reached`);
+                    }
+                    if(isMouseDownForBrush && (eventType === 'mousemove' || eventType === 'touchmove')) {
+                        isMouseDownForBrush = false; 
+                    }
+                }
+            }
+        }
+        function showToast(message) { 
+            const toast = document.getElementById('toast-message');
+            if (!toast) return;
+            toast.textContent = message; toast.classList.add('show');
+            setTimeout(() => { toast.classList.remove('show'); }, 3000);
+        }
+
+        function animationLoop(timestamp) {
+            if (!gl) { 
+                stopAnimationLoop();
+                return;
+            }
+            const raw_dt = Math.min(0.1, (timestamp - lastFrameTime) / 1000 || 1/60);
+            lastFrameTime = timestamp;
+            let allNewParticlesThisFrame = [];
+
+            if (enableBiomes && noiseGenerator && settings.enableAbsorptionExplosion) { 
+                const RESOURCE_SPAWN_CHANCE_PER_FRAME = 0.03;
+                const MAX_ENERGY_IN_WORLD_FROM_NOISE = 75;
+                const SPAWN_ATTEMPTS = 3;
+
+                if (Math.random() < RESOURCE_SPAWN_CHANCE_PER_FRAME) {
+                    let currentEnergyParticlesCount = particles.filter(p => p.isAlive && p.type === 'energy').length;
+                    if (currentEnergyParticlesCount < MAX_ENERGY_IN_WORLD_FROM_NOISE && particles.filter(p => p.isAlive).length < MAX_TOTAL_PARTICLES) {
+                        for (let attempt = 0; attempt < SPAWN_ATTEMPTS; attempt++) {
+                            const spawnX = Math.random() * WORLD_WIDTH;
+                            const spawnY = Math.random() * WORLD_HEIGHT;
+                            const noiseVal = noiseGenerator.octaveNoise(spawnX / noiseScale, spawnY / noiseScale, noiseOctaves, noisePersistence);
+
+                            let chosenBiomeForSpawn = BIOME_SETTINGS.DEFAULT_SPACE;
+                            for (const biomeKey in BIOME_SETTINGS) {
+                                if (biomeKey === 'DEFAULT_SPACE') continue;
+                                const biome = BIOME_SETTINGS[biomeKey];
+                                const matchesMin = biome.thresholdMin === undefined || noiseVal >= biome.thresholdMin;
+                                const matchesMax = biome.thresholdMax === undefined || noiseVal < biome.thresholdMax;
+                                if (matchesMin && matchesMax) {
+                                    chosenBiomeForSpawn = biome;
+                                    break;
+                                }
+                            }
+                            if (chosenBiomeForSpawn.spawnWeight > 0 && Math.random() < (chosenBiomeForSpawn.spawnWeight / 10)) {
+                                if (particles.filter(p => p.isAlive).length + allNewParticlesThisFrame.length < MAX_TOTAL_PARTICLES) {
+                                    const energyP = new Particle(spawnX, spawnY, 0, 'energy');
+                                    allNewParticlesThisFrame.push(energyP);
+                                    break;
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+            for (let i = particles.length - 1; i >= 0; i--) { 
+                const p = particles[i];
+                if (!p.isAlive) continue;
+                const updateResult = p.update(raw_dt, particles);
+                if (updateResult.newParticlesFromSplit) {
+                    allNewParticlesThisFrame.push(...updateResult.newParticlesFromSplit);
+                }
+                if (p.isAlive && p.type === 'normal' && updateResult.shouldExplode) {
+                     if (settings.enableAbsorptionExplosion) {
+                        const energyBits = p.explode();
+                        allNewParticlesThisFrame.push(...energyBits);
+                    } else { p.isAlive = false; }
+                }
+            }
+            const currentLiveParticleCount = particles.filter(p => p.isAlive).length;
+            if (allNewParticlesThisFrame.length > 0) { 
+                const availableSlots = MAX_TOTAL_PARTICLES - currentLiveParticleCount;
+                if (availableSlots > 0) {
+                     particles.push(...allNewParticlesThisFrame.slice(0, Math.min(allNewParticlesThisFrame.length, availableSlots)));
+                }
+            }
+            particles = particles.filter(p => p.isAlive);
+
+            if (enableGravityWells && heavyObjects.length > 0) {
+                particles.forEach(p => {
+                    if (!p.isAlive) return;
+                    heavyObjects.forEach(bh => {
+                        const dx = bh.x - p.x;
+                        const dy = bh.y - p.y;
+                        const distSq = dx * dx + dy * dy;
+
+                        if (distSq > 0.0001) { // Avoid division by zero if particle is exactly at BH center
+                            const dist = Math.sqrt(distSq);
+                            const force = (gravityConstant * bh.mass * p.mass) / distSq;
+                            let ax = (force * dx / dist) / p.mass;
+                            let ay = (force * dy / dist) / p.mass;
+
+                            const totalBHAccelerationMag = Math.sqrt(ax*ax + ay*ay);
+                            const maxBHForce = maxForce * 2; // Allow stronger force for BH
+                            if (totalBHAccelerationMag > maxBHForce) {
+                                const scale = maxBHForce / totalBHAccelerationMag;
+                                ax *= scale; ay *= scale;
+                            }
+                            p.vx += ax * raw_dt * simulationSpeed;
+                            p.vy += ay * raw_dt * simulationSpeed;
+                        }
+
+                        if (p.type !== 'energy' && distSq < bh.eventHorizonRadius * bh.eventHorizonRadius) {
+                            p.isAlive = false;
+                            bh.absorb();
+                        }
+                    });
+                });
+            }
+
+
+            if (spatialGrid) { 
+                spatialGrid.clear();
+                particles.forEach(p => { if(p.isAlive) spatialGrid.addParticle(p); });
+
+                let particlesToSplitFromHunt = [];
+
+                particles.forEach(p1 => {
+                    if (!p1.isAlive) return;
+                    const nearby = spatialGrid.getNearbyParticles(p1);
+                    nearby.forEach(p2 => {
+                        if (!p2.isAlive || p1 === p2) return;
+
+                        if (settings.enablePredatorPrey && p1.type === 'normal' && p2.type === 'normal' &&
+                            p1.isPredator && p1.huntsColor === p2.colorIndex && !p2.isPredator) {
+                            const dxHunt = p1.x - p2.x;
+                            const dyHunt = p1.y - p2.y;
+                            const distSqHunt = dxHunt * dxHunt + dyHunt * dyHunt;
+                            const collisionDistHunt = p1.radius + p2.radius;
+
+                            if (distSqHunt < collisionDistHunt * collisionDistHunt) {
+                                p2.isAlive = false;
+                                p1.age = Math.max(0, p1.age - settings.lifeGainFromHunt);
+                                p1.mass += settings.massGainFromHunt;
+                                p1.mass = Math.min(p1.mass, settings.maxParticleMass);
+                                p1.radius = p1.baseRadius * Math.sqrt(p1.mass);
+                                p1.radius = Math.max(1, p1.radius);
+
+                                p1.state = 'was_hunting';
+                                p1.targetParticle = null;
+                                p1.stateTicks = 0;
+
+                                if (enableSplitting && Math.random() < settings.predatorSplitChanceOnHunt) {
+                                   particlesToSplitFromHunt.push(p1);
+                                }
+                                return; // p2 is consumed, no further interaction with p1 this iteration
+                            }
+                        }
+
+                        if (settings.enableAbsorptionExplosion &&
+                            p1.type === 'normal' && p2.type === 'energy' &&
+                            p1.isAlive && p2.isAlive) { // check p1 and p2 aliveness again
+                            const dxAbsorb = p1.x - p2.x; const dyAbsorb = p1.y - p2.y;
+                            const distSqAbsorb = dxAbsorb * dxAbsorb + dyAbsorb * dyAbsorb;
+                            const absorbDist = (p1.radius * p1.individualAbsorptionRadiusFactor) + p2.radius;
+                            if (distSqAbsorb < absorbDist * absorbDist) { 
+                                p1.absorb(p2); // p2.isAlive becomes false here
+                                return; // p2 is consumed
+                            }
+                        }
+
+                        if (p1.type === 'normal' && p2.type === 'normal' && p1.isAlive && p2.isAlive) {
+                            const r1c = p1.colorIndex % (rules.length > 0 ? rules.length : 1);
+                            // Ensure rules[r1c] exists before trying to access its length or content
+                            const r2c = (rules[r1c] ? p2.colorIndex % rules[r1c].length : 0);
+                            const ruleVal = (rules[r1c] && rules[r1c][r2c] !== undefined) ? rules[r1c][r2c] : 0;
+                            p1.interact(p2, ruleVal, raw_dt);
+                        }
+                    });
+                });
+                if (particlesToSplitFromHunt.length > 0) { 
+                    let newOffspringFromHunts = [];
+                    particlesToSplitFromHunt.forEach(predator => {
+                        if (predator.isAlive) { // Predator might have died from other interactions
+                            const offspring = predator.split(); // predator.isAlive becomes false here
+                            if (offspring) newOffspringFromHunts.push(...offspring);
+                        }
+                    });
+                    if (newOffspringFromHunts.length > 0) {
+                         const currentLive = particles.filter(p => p.isAlive).length; // Re-filter before adding
+                         const availableSlots = MAX_TOTAL_PARTICLES - currentLive;
+                         if (availableSlots > 0) {
+                            particles.push(...newOffspringFromHunts.slice(0, Math.min(newOffspringFromHunts.length, availableSlots)));
+                         }
+                    }
+                }
+            }
+            particles = particles.filter(p => p.isAlive); // Final filter for the frame
+
+            drawScene();
+            frameCount++; const now = performance.now();
+            const deltaFps = now - lastFpsUpdateTime;
+            if (deltaFps >= 1000) {
+                if(fpsDisplay) fpsDisplay.textContent = (frameCount / (deltaFps / 1000)).toFixed(1);
+                lastFpsUpdateTime = now; frameCount = 0;
+            }
+            if(particleCountDisplay) particleCountDisplay.textContent = particles.length;
+            if (stepMode) {
+                isPaused = true; stepMode = false;
+                const pauseBtn = document.getElementById('pauseResumeBtn');
+                if (pauseBtn) pauseBtn.textContent = 'Resume';
+                animationFrameId = null;
+                return;
+            }
+            if (!isPaused) animationFrameId = requestAnimationFrame(animationLoop);
+            else animationFrameId = null;
+        }
+
+        function drawScene() {
+            if (!gl) { console.error("drawScene: gl context is null!"); return; }
+
+            // console.log("drawScene - enableBiomes:", enableBiomes, "worldNoiseNeedsUpdate:", worldNoiseNeedsUpdate); // DEBUG
+            // console.log("Camera:", camera.x.toFixed(1), camera.y.toFixed(1), camera.zoom.toFixed(2)); // DEBUG
+
+            gl.enable(gl.BLEND);
+            gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
+
+            const clearAlpha = showTrails ? (1.0 - trailOpacity) : 1.0; 
+            // const clearAlpha = 1.0; // DEBUG: Force opaque clear
+            // console.log("Clear Alpha:", clearAlpha.toFixed(2)); // DEBUG
+            gl.clearColor(0.067, 0.094, 0.153, clearAlpha); 
+            gl.clear(gl.COLOR_BUFFER_BIT);
+
+            const time = performance.now();
+
+            if (enableBiomes) { 
+                if (worldNoiseNeedsUpdate && WORLD_WIDTH > 0 && WORLD_HEIGHT > 0) { // Ensure valid world size
+                    // console.log("Attempting to update world noise texture NOW."); // DEBUG
+                    updateWorldNoiseTexture(); 
+                }
+                if (backgroundShaderProgram && backgroundPositionLocation !== -1 && backgroundTextureLocation !== null) { // Check valid program and locations
+                    // console.log("Drawing biomes (or solid color if shader is modified)..."); // DEBUG
+                    gl.useProgram(backgroundShaderProgram);
+                    gl.bindBuffer(gl.ARRAY_BUFFER, backgroundPositionBuffer);
+                    gl.enableVertexAttribArray(backgroundPositionLocation);
+                    gl.vertexAttribPointer(backgroundPositionLocation, 2, gl.FLOAT, false, 0, 0);
+                    
+                    gl.activeTexture(gl.TEXTURE0);
+                    gl.bindTexture(gl.TEXTURE_2D, biomeTexture); 
+                    gl.uniform1i(backgroundTextureLocation, 0);
+                    
+                    gl.drawArrays(gl.TRIANGLES, 0, 6);
+                    gl.disableVertexAttribArray(backgroundPositionLocation);
+                } else {
+                    // console.warn("Biome drawing skipped: backgroundShaderProgram or locations invalid."); // DEBUG
+                }
+            }
+
+            if (particleShaderProgram && particlePositionLocation !== -1 /* add other checks if needed */) { // Check valid program and locations
+                gl.useProgram(particleShaderProgram);
+
+                gl.uniform2f(particleResolutionLocation, WORLD_WIDTH, WORLD_HEIGHT);
+                gl.uniform3f(particleCameraLocation, camera.x, camera.y, camera.zoom);
+                gl.uniform1i(particleGlowLocation, particleGlow);
+                gl.uniform1f(particleTimeLocation, time);
+
+                const numDrawableParticles = particles.length + heavyObjects.length * 2; 
+                if (numDrawableParticles > 0) {
+                    const positions = new Float32Array(numDrawableParticles * 2);
+                    const colors = new Float32Array(numDrawableParticles * 3);
+                    const sizes = new Float32Array(numDrawableParticles);
+                    const types = new Float32Array(numDrawableParticles); 
+                    let offset = 0;
+
+                    particles.forEach(p => {
+                        if (!p.isAlive) return;
+                        positions[offset * 2] = p.x;
+                        positions[offset * 2 + 1] = p.y;
+                        const rgbColor = COLORS_RGB[p.colorIndex % COLORS_RGB.length] || [1,1,1]; 
+                        colors[offset * 3] = rgbColor[0];
+                        colors[offset * 3 + 1] = rgbColor[1];
+                        colors[offset * 3 + 2] = rgbColor[2];
+                        sizes[offset] = p.radius;
+                        types[offset] = p.type === 'energy' ? 1.0 : 0.0;
+                        offset++;
+                    });
+
+                    heavyObjects.forEach(bh => {
+                        positions[offset * 2] = bh.x;
+                        positions[offset * 2 + 1] = bh.y;
+                        colors[offset * 3] = 0; colors[offset * 3 + 1] = 0; colors[offset * 3 + 2] = 0; 
+                        sizes[offset] = bh.eventHorizonRadius;
+                        types[offset] = 2.0; 
+                        offset++;
+
+                        const diskRadius = bh.eventHorizonRadius * 2.5; 
+                        positions[offset * 2] = bh.x;
+                        positions[offset * 2 + 1] = bh.y;
+                        colors[offset * 3] = 0.8; colors[offset * 3 + 1] = 0.7; colors[offset * 3 + 2] = 1.0; 
+                        sizes[offset] = diskRadius; 
+                        types[offset] = 3.0; 
+                        offset++;
+                    });
+
+                    const actualDrawableCount = offset; 
+                    // if (frameCount % 300 === 0) console.log("Actual Drawable Particle/BH Count:", actualDrawableCount); // DEBUG periodically
+
+                    if (actualDrawableCount > 0) {
+                        gl.bindBuffer(gl.ARRAY_BUFFER, particlePositionBuffer);
+                        gl.bufferData(gl.ARRAY_BUFFER, positions.subarray(0, actualDrawableCount * 2), gl.DYNAMIC_DRAW);
+                        gl.enableVertexAttribArray(particlePositionLocation);
+                        gl.vertexAttribPointer(particlePositionLocation, 2, gl.FLOAT, false, 0, 0);
+
+                        gl.bindBuffer(gl.ARRAY_BUFFER, particleColorBuffer);
+                        gl.bufferData(gl.ARRAY_BUFFER, colors.subarray(0, actualDrawableCount * 3), gl.DYNAMIC_DRAW);
+                        gl.enableVertexAttribArray(particleColorLocation);
+                        gl.vertexAttribPointer(particleColorLocation, 3, gl.FLOAT, false, 0, 0);
+
+                        gl.bindBuffer(gl.ARRAY_BUFFER, particleSizeBuffer);
+                        gl.bufferData(gl.ARRAY_BUFFER, sizes.subarray(0, actualDrawableCount), gl.DYNAMIC_DRAW);
+                        gl.enableVertexAttribArray(particleSizeLocation);
+                        gl.vertexAttribPointer(particleSizeLocation, 1, gl.FLOAT, false, 0, 0);
+
+                        gl.bindBuffer(gl.ARRAY_BUFFER, particleTypeBuffer);
+                        gl.bufferData(gl.ARRAY_BUFFER, types.subarray(0, actualDrawableCount), gl.DYNAMIC_DRAW);
+                        gl.enableVertexAttribArray(particleTypeLocation);
+                        gl.vertexAttribPointer(particleTypeLocation, 1, gl.FLOAT, false, 0, 0);
+
+                        gl.drawArrays(gl.POINTS, 0, actualDrawableCount);
+
+                        gl.disableVertexAttribArray(particlePositionLocation);
+                        gl.disableVertexAttribArray(particleColorLocation);
+                        gl.disableVertexAttribArray(particleSizeLocation);
+                        gl.disableVertexAttribArray(particleTypeLocation);
+                    }
+                }
+            } else {
+                // console.warn("Particle drawing skipped: particleShaderProgram or locations invalid."); // DEBUG
+            }
+        }
+
+        function resizeCanvas() {
+            if (!gl) { console.error("resizeCanvas: gl context is null!"); return; }
+            const parent = canvas.parentElement;
+            if (!parent) return;
+
+            const displayWidth  = parent.clientWidth;
+            const displayHeight = Math.max(150, parent.clientHeight - (document.getElementById('infoDisplay')?.offsetHeight || 0) - 10);
+            
+            // console.log("Resizing canvas. Current:", canvas.width, "x", canvas.height, "New:", displayWidth, "x", displayHeight); // DEBUG
+
+            if (canvas.width !== displayWidth || canvas.height !== displayHeight) {
+                canvas.width = displayWidth;
+                canvas.height = displayHeight;
+            }
+
+            WORLD_WIDTH = canvas.width;
+            WORLD_HEIGHT = canvas.height;
+            if(worldSizeDisplay) worldSizeDisplay.textContent = `${WORLD_WIDTH}x${WORLD_HEIGHT}`;
+
+            gl.viewport(0, 0, gl.drawingBufferWidth, gl.drawingBufferHeight);
+            // console.log("Viewport set to:", gl.drawingBufferWidth, "x", gl.drawingBufferHeight); // DEBUG
+
+
+            const currentMaxDist = maxDist > 0 ? maxDist : 80;
+            if (WORLD_WIDTH > 0 && WORLD_HEIGHT > 0) {
+                 spatialGrid = new SpatialGrid(WORLD_WIDTH, WORLD_HEIGHT, currentMaxDist);
+                 particles.forEach(p => { if(p.isAlive && spatialGrid) spatialGrid.addParticle(p); });
+            } else {
+                console.warn("resizeCanvas: WORLD_WIDTH or WORLD_HEIGHT is zero or negative, spatialGrid not fully initialized."); //DEBUG
+            }
+
+            camera.x = Math.max(0, Math.min(WORLD_WIDTH, camera.x));
+            camera.y = Math.max(0, Math.min(WORLD_HEIGHT, camera.y));
+
+            worldNoiseNeedsUpdate = true; 
+
+            if (isPaused && animationFrameId === null) {
+                drawScene(); 
+            } else if (!isPaused && animationFrameId === null) {
+                startAnimationLoop(); 
+            }
+        }
+
+        window.addEventListener('load', () => {
+            console.log("Window loaded."); // DEBUG
+            if (!gl) { 
+                console.error("WebGL context not available at window.onload. Simulation cannot start.");
+                return;
+            }
+            initializeWebGLShadersAndPrograms();
+
+            if (absorbedByBHCountDisplay) absorbedByBHCountDisplay.textContent = totalAbsorbedByBH;
+            
+            // Ensure WORLD_WIDTH and WORLD_HEIGHT are set from initial canvas size BEFORE first resetSimulation
+            WORLD_WIDTH = canvas.width;
+            WORLD_HEIGHT = canvas.height;
+            if (WORLD_WIDTH <= 0 || WORLD_HEIGHT <= 0) { // Fallback if canvas has no size initially
+                 const parent = canvas.parentElement;
+                 if (parent) {
+                    canvas.width = parent.clientWidth > 0 ? parent.clientWidth : 600; // Default fallback
+                    canvas.height = Math.max(150, (parent.clientHeight > 0 ? parent.clientHeight : 400) - (document.getElementById('infoDisplay')?.offsetHeight || 0) - 10);
+                    WORLD_WIDTH = canvas.width;
+                    WORLD_HEIGHT = canvas.height;
+                    console.warn("Canvas initial size was 0, set to:", WORLD_WIDTH, "x", WORLD_HEIGHT); // DEBUG
+                 }
+            }
+            if(worldSizeDisplay) worldSizeDisplay.textContent = `${WORLD_WIDTH}x${WORLD_HEIGHT}`;
+            gl.viewport(0, 0, gl.drawingBufferWidth, gl.drawingBufferHeight); // Initial viewport
+
+
+            resizeCanvas(); // Call resize once to set initial WORLD_WIDTH/HEIGHT correctly before setup
+            
+            setupEventListeners(); // Sets up controlConfigurations
+
+            // Initialize global variables from default control values
+            controlConfigurations.forEach(config => {
+                const inputEl = document.getElementById(config.id);
+                if (inputEl) {
+                    let val;
+                     if (inputEl.type === 'checkbox') val = inputEl.checked;
+                     else if (inputEl.tagName === 'SELECT') val = inputEl.value;
+                     else if (config.isInt) val = parseInt(inputEl.value);
+                     else val = parseFloat(inputEl.value);
+                    config.valueRef(val); // This applies the default value to the JS variable (e.g. enableBiomes)
+                    if (inputEl.type === 'range') {
+                        const valueDisplay = document.getElementById(config.id.replace("Slider","") + 'Value');
+                        if (valueDisplay) valueDisplay.textContent = inputEl.value;
+                    }
+                }
+            });
+            updateConditionalControls(); // Update visibility based on initial values
+            
+            lastFrameTime = performance.now(); // Initialize before first animation loop call
+            resetSimulation(); 
+            showToast("Particle Life: Debugging Version Loaded!");
+        });
+        window.addEventListener('resize', resizeCanvas);
+    </script>
+</body>
+</html>

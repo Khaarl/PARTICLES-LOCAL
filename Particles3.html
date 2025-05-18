@@ -3,41 +3,82 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Particle Life: V2 - Optimizations & Biome Settings</title>
+    <title>Particle Life: Evolution, AI, Mass, Biomes & Predation</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700&display=swap" rel="stylesheet">
     <style>
         body {
             font-family: 'Inter', sans-serif;
-            overscroll-behavior: none; 
+            overscroll-behavior: none;
         }
         canvas {
             display: block;
-            background-color: #111827; 
-            border: 1px solid #374151; 
-            border-radius: 0.5rem; 
+            /* background-color: #111827; */ /* Will be drawn by canvas itself */
+            border: 1px solid #374151; /* border-gray-700 */
+            border-radius: 0.5rem; /* rounded-lg */
             touch-action: none; 
         }
         .control-panel {
             background-color: #1f2937; 
-            color: #d1d5db; 
+            color: #d1d5db;    
             border-radius: 0.5rem; 
+            padding: 1rem;      
+            overflow-y: auto;
+            
+            position: fixed; 
+            right: 1rem; 
+            top: 1rem;
+            bottom: 1rem;
+            width: 24rem; 
+            transition: transform 0.3s ease-in-out, opacity 0.3s ease-in-out;
+            z-index: 500; 
         }
-        .control-panel label, .control-panel h3, .control-panel h4, .control-panel select {
+        .control-panel.hidden-by-h-key {
+            display: none !important; 
+        }
+        .control-panel.minimized-for-fullscreen {
+            transform: translateX(calc(100% - 40px - 1rem)); 
+            opacity: 0.85; 
+        }
+        .control-panel.minimized-for-fullscreen.fully-expanded-in-fullscreen {
+           transform: translateX(0%);
+           opacity: 1;
+        }
+        .control-panel-tab-handle {
+            position: absolute;
+            left: -30px;
+            top: 50%;
+            transform: translateY(-50%);
+            padding: 15px 8px;
+            background-color: #374151; 
             color: #9ca3af; 
+            border-top-left-radius: 0.25rem;
+            border-bottom-left-radius: 0.25rem;
+            cursor: pointer;
+            font-size: 1rem;
+            line-height: 1;
+            box-shadow: -2px 0 5px rgba(0,0,0,0.2);
+            display: none; 
+        }
+        .control-panel.minimized-for-fullscreen .control-panel-tab-handle {
+            display: block; 
+        }
+        /* ... other existing styles ... */
+        .control-panel label, .control-panel h3, .control-panel h4, .control-panel select {
+            color: #9ca3af; /* text-gray-400 */
         }
         .control-panel select {
-            background-color: #374151; 
-            border-radius: 0.25rem; 
+            background-color: #374151; /* bg-gray-700 */
+            border-radius: 0.25rem; /* rounded */
             padding: 0.25rem 0.5rem;
-            border-color: #4b5563; 
+            border-color: #4b5563; /* border-gray-600 */
         }
         .control-panel input[type="range"] {
             -webkit-appearance: none;
             appearance: none;
             width: 100%;
             height: 8px;
-            background: #4b5563; 
+            background: #4b5563; /* bg-gray-600 */
             outline: none;
             opacity: 0.7;
             transition: opacity .15s ease-in-out;
@@ -48,39 +89,39 @@
             appearance: none;
             width: 18px;
             height: 18px;
-            background: #60a5fa; 
+            background: #60a5fa; /* bg-blue-400 */
             cursor: pointer;
             border-radius: 50%;
-            border: 2px solid #1f2937; 
+            border: 2px solid #1f2937; /* border-gray-800 */
         }
         .control-panel input[type="range"]::-moz-range-thumb {
             width: 18px;
             height: 18px;
-            background: #60a5fa; 
+            background: #60a5fa; /* bg-blue-400 */
             cursor: pointer;
             border-radius: 50%;
-            border: 2px solid #1f2937; 
+            border: 2px solid #1f2937; /* border-gray-800 */
         }
         .control-panel button {
-            background-color: #3b82f6; 
+            background-color: #3b82f6; /* bg-blue-500 */
             color: white;
             transition: background-color 0.3s;
         }
         .control-panel button:hover {
-            background-color: #2563eb; 
+            background-color: #2563eb; /* bg-blue-600 */
         }
         .control-panel button.secondary {
-            background-color: #4b5563; 
+            background-color: #4b5563; /* bg-gray-600 */
         }
         .control-panel button.secondary:hover {
-            background-color: #6b7280; 
+            background-color: #6b7280; /* bg-gray-500 */
         }
         .rule-grid table {
             border-collapse: collapse;
             width: 100%;
         }
         .rule-grid th, .rule-grid td {
-            border: 1px solid #4b5563; 
+            border: 1px solid #4b5563; /* border-gray-600 */
             padding: 4px;
             text-align: center;
             min-width: 30px;
@@ -89,7 +130,7 @@
             font-size: 0.8rem;
         }
         .rule-grid th {
-            background-color: #374151; 
+            background-color: #374151; /* bg-gray-700 */
         }
         .color-picker-button {
             width: 24px;
@@ -98,18 +139,18 @@
             margin: 2px;
         }
         .color-picker-button.selected {
-            border-color: #60a5fa; 
-            box-shadow: 0 0 0 2px #60a5fa; 
+            border-color: #60a5fa; /* border-blue-400 */
+            box-shadow: 0 0 0 2px #60a5fa; /* ring-2 ring-blue-400 */
         }
         #toast-message {
             position: fixed;
             bottom: 20px;
             left: 50%;
             transform: translateX(-50%);
-            background-color: #1f2937; 
+            background-color: #1f2937; /* bg-gray-800 */
             color: white;
             padding: 10px 20px;
-            border-radius: 0.5rem; 
+            border-radius: 0.5rem; /* rounded-lg */
             box-shadow: 0 2px 10px rgba(0,0,0,0.5);
             z-index: 1000;
             opacity: 0;
@@ -124,7 +165,7 @@
             transition: max-height 0.3s ease-out, opacity 0.3s ease-out, margin 0.3s ease-out, padding 0.3s ease-out;
             overflow: hidden;
         }
-        .conditional-control.hidden {
+        .conditional-control.hidden { /* For internal conditional controls */
              max-height: 0 !important;
              opacity: 0 !important;
              margin-top: 0 !important;
@@ -141,12 +182,14 @@
         <canvas id="particleCanvas" class="flex-grow"></canvas>
         <div id="infoDisplay" class="text-sm mt-2 p-2 bg-gray-800 rounded-md text-center lg:text-left">
             Particles: <span id="particleCount">0</span> | FPS: <span id="fpsDisplay">0</span>
+            | BH Absorbed: <span id="absorbedByBHCount">0</span>
         </div>
     </div>
 
     <div class="control-panel w-full lg:w-96 p-4 space-y-4 overflow-y-auto max-h-full">
+        <div class="control-panel-tab-handle" title="Toggle Panel">☰</div>
         <h3 class="text-xl font-semibold border-b border-gray-700 pb-2">Controls</h3>
-
+        <!-- ... Rest of your controls ... -->
         <div>
             <label for="numParticles" class="block text-sm font-medium">Number of Particles: <span id="numParticlesValue">200</span></label>
             <input type="range" id="numParticles" min="10" max="1000" value="200" class="w-full">
@@ -311,10 +354,10 @@
         </div>
         <div id="biomeNoiseParamsContainer" class="conditional-control space-y-2 hidden">
             <div>
-                <label for="noiseScaleSlider" class="block text-sm font-medium">Noise Scale: <span id="noiseScaleValue">150</span></label>
+                <label for="noiseScaleSlider" class="block text-sm font-medium">Noise Scale (lower = larger features): <span id="noiseScaleValue">150</span></label>
                 <input type="range" id="noiseScaleSlider" min="20" max="500" value="150" step="10" class="w-full">
             </div>
-            <div>
+             <div>
                 <label for="noiseOctavesSlider" class="block text-sm font-medium">Noise Octaves: <span id="noiseOctavesValue">3</span></label>
                 <input type="range" id="noiseOctavesSlider" min="1" max="8" value="3" step="1" class="w-full">
             </div>
@@ -325,18 +368,18 @@
             <button id="regenerateNoiseSeedBtn" class="w-full mt-1 py-2 px-4 rounded-md text-sm secondary">Regenerate Noise Seed</button>
         </div>
         
-        <h4 class="text-lg font-medium pt-2">Gravity Wells</h4>
+        <h4 class="text-lg font-medium pt-2">Gravity Wells (Black Holes)</h4>
         <div>
             <input type="checkbox" id="enableGravityWells" class="mr-2 rounded">
-            <label for="enableGravityWells" class="text-sm font-medium">Enable Gravity Wells</label>
+            <label for="enableGravityWells" class="text-sm font-medium">Enable Black Holes</label>
         </div>
         <div id="gravityWellParamsContainer" class="conditional-control space-y-2 hidden">
             <div>
-                <label for="numGravityWells" class="block text-sm font-medium">Number of Wells: <span id="numGravityWellsValue">1</span></label>
+                <label for="numGravityWells" class="block text-sm font-medium">Number of Black Holes: <span id="numGravityWellsValue">1</span></label>
                 <input type="range" id="numGravityWells" min="0" max="5" value="1" step="1" class="w-full">
             </div>
             <div>
-                <label for="gravityWellMass" class="block text-sm font-medium">Well Mass: <span id="gravityWellMassValue">100000</span></label>
+                <label for="gravityWellMass" class="block text-sm font-medium">BH Mass: <span id="gravityWellMassValue">100000</span></label>
                 <input type="range" id="gravityWellMass" min="10000" max="500000" value="100000" step="10000" class="w-full">
             </div>
             <div>
@@ -344,10 +387,10 @@
                 <input type="range" id="gravityConstant" min="0.01" max="5" value="0.5" step="0.01" class="w-full">
             </div>
             <div>
-                <label for="gravityWellRadius" class="block text-sm font-medium">Well Visual Radius: <span id="gravityWellRadiusValue">10</span></label>
-                <input type="range" id="gravityWellRadius" min="3" max="20" value="10" step="1" class="w-full">
+                <label for="gravityWellRadius" class="block text-sm font-medium">BH Event Horizon Radius: <span id="gravityWellRadiusValue">10</span></label>
+                <input type="range" id="gravityWellRadius" min="3" max="30" value="10" step="1" class="w-full">
             </div>
-            <button id="addGravityWellOnClickBtn" class="w-full mt-1 py-2 px-4 rounded-md text-sm secondary">Add Well at Next Click</button>
+            <button id="addGravityWellOnClickBtn" class="w-full mt-1 py-2 px-4 rounded-md text-sm secondary">Add Black Hole at Next Click</button>
         </div>
 
 
@@ -395,150 +438,140 @@
         const canvas = document.getElementById('particleCanvas');
         const ctx = canvas.getContext('2d');
 
-        // --- Perlin Noise Implementation (Simplified Classic Perlin) ---
         class PerlinNoise {
             constructor(seed = Math.random()) {
-                this.p = new Uint8Array(512); 
+                this.p = new Uint8Array(512);
+                this.seedValue = seed;
                 this.perm = []; 
-                this.grad3 = [ 
-                               [1,1,0],[-1,1,0],[1,-1,0],[-1,-1,0],
+                this.grad3 = [ [1,1,0],[-1,1,0],[1,-1,0],[-1,-1,0],
                                [1,0,1],[-1,0,1],[1,0,-1],[-1,0,-1],
                                [0,1,1],[0,-1,1],[0,1,-1],[0,-1,-1] ];
-                this.seedValue = seed; 
                 this.seed(this.seedValue);
             }
-
-            seed(s) {
-                this.seedValue = s; 
-                let currentSeed = s; 
+            seed(s) { /* ... same ... */ 
+                this.seedValue = s;
                 let random = () => { 
-                    let x = Math.sin(currentSeed++) * 10000;
+                    let x = Math.sin(this.seedValue++) * 10000;
                     return x - Math.floor(x);
                 };
                 for (let i = 0; i < 256; i++) this.p[i] = i;
                 for (let i = 255; i > 0; i--) {
                     const j = Math.floor(random() * (i + 1));
-                    [this.p[i], this.p[j]] = [this.p[j], this.p[i]]; 
+                    [this.p[i], this.p[j]] = [this.p[j], this.p[i]];
                 }
                 for (let i = 0; i < 256; i++) {
                     this.p[i + 256] = this.p[i];
-                    this.perm[i] = this.perm[i+256] = this.p[i]; 
+                    this.perm[i] = this.perm[i+256] = this.p[i];
                 }
             }
-
             fade(t) { return t * t * t * (t * (t * 6 - 15) + 10); }
             lerp(t, a, b) { return a + t * (b - a); }
-            grad(hash, x, y, z) { 
-                const h = hash & 15;      
-                const u = h < 8 ? x : y;  
-                const v = h < 4 ? y : (h === 12 || h === 14 ? x : z); 
-                return ((h & 1) === 0 ? u : -u) + ((h & 2) === 0 ? v : -v); 
+            grad(hash, x, y, z) { /* ... same ... */
+                const h = hash & 15;
+                const u = h < 8 ? x : y;
+                const v = h < 4 ? y : h === 12 || h === 14 ? x : z;
+                return ((h & 1) === 0 ? u : -u) + ((h & 2) === 0 ? v : -v);
             }
-
-            noise(x, y) {
-                const X = Math.floor(x) & 255; 
-                const Y = Math.floor(y) & 255; 
-                x -= Math.floor(x); 
-                y -= Math.floor(y); 
+            noise(x, y) { /* ... same ... */
+                const X = Math.floor(x) & 255;
+                const Y = Math.floor(y) & 255;
+                x -= Math.floor(x);
+                y -= Math.floor(y);
                 const u = this.fade(x);
                 const v = this.fade(y);
-                const A = this.p[X] + Y;
-                const AA = this.p[A];
-                const AB = this.p[A + 1];
-                const B = this.p[X + 1] + Y;
-                const BA = this.p[B];
-                const BB = this.p[B + 1];
-                return this.lerp(v, this.lerp(u, this.grad(this.p[AA], x, y, 0),      
-                                                this.grad(this.p[BA], x - 1, y, 0)),   
-                                    this.lerp(u, this.grad(this.p[AB], x, y - 1, 0),  
-                                                this.grad(this.p[BB], x - 1, y - 1, 0))); 
+                const A = this.p[X] + Y, AA = this.p[A], AB = this.p[A + 1];
+                const B = this.p[X + 1] + Y, BA = this.p[B], BB = this.p[B + 1];
+
+                return this.lerp(v, this.lerp(u, this.grad(this.p[AA], x, y, 0),
+                                                this.grad(this.p[BA], x - 1, y, 0)),
+                                    this.lerp(u, this.grad(this.p[AB], x, y - 1, 0),
+                                                this.grad(this.p[BB], x - 1, y - 1, 0)));
             }
-            
-            octaveNoise(x, y, octaves = 3, persistence = 0.5) {
+            octaveNoise(x, y, octaves = 3, persistence = 0.5) { /* ... same ... */
                 let total = 0;
                 let frequency = 1;
                 let amplitude = 1;
-                let maxValue = 0;  
+                let maxValue = 0; 
 
                 for(let i=0; i < octaves; i++) {
                     total += this.noise(x * frequency, y * frequency) * amplitude;
                     maxValue += amplitude;
-                    amplitude *= persistence; 
-                    frequency *= 2;         
+                    amplitude *= persistence;
+                    frequency *= 2;
                 }
                 return total / maxValue; 
             }
         }
 
-
-        // --- Global State & Parameters ---
         let particles = [];
         let rules = [];
         let COLORS = [];
-
-        const WORLD_WIDTH = 2000; 
+        
+        const WORLD_WIDTH = 2000;
         const WORLD_HEIGHT = 1200;
 
-        // Noise Biome Settings
         let noiseGenerator;
         let noiseScale = 150; 
         let noiseSeed = Math.random(); 
-        let noiseOctaves = 3; 
-        let noisePersistence = 0.45; 
-
-        // Offscreen canvas for pre-rendered noise biome background
+        let noiseOctaves = 3;
+        let noisePersistence = 0.45;
+        let worldNoiseNeedsUpdate = true; 
         let offscreenNoiseCanvas = null;
         let offscreenNoiseCtx = null;
-        let worldNoiseNeedsUpdate = true; // Flag to trigger full re-render of offscreen canvas
 
-        // --- Biome Definitions ---
-        const BIOME_SETTINGS = {
+        const BIOME_SETTINGS = { /* ... same as previous response ... */
             VOID: {
                 label: "Void",
                 thresholdMax: -0.4, 
-                colorFn: (noiseVal, worldX, worldY) => ({ 
-                    r: 5 + Math.floor(Math.abs(noiseVal) * 10), // abs to ensure positive addition
-                    g: 5 + Math.floor(Math.abs(noiseVal) * 10),
-                    b: 10 + Math.floor(Math.abs(noiseVal) * 20), 
-                    a: 255 
-                }),
-                effects: {
-                    viscosityMultiplier: 0.8,
-                    forceFactorMultiplier: 0.9,
+                colorFn: (noiseVal, time, worldX, worldY, secondaryNoiseFn) => {
+                    let r = 5 + Math.floor(noiseVal*-10);
+                    let g = 5 + Math.floor(noiseVal*-10);
+                    let b = 10 + Math.floor(noiseVal*-20);
+                    // Subtle stars - use a deterministic way to place them
+                    // Simple hash-like function to sparsely place stars
+                    const starCheckX = Math.floor(worldX / 50); // Grid cell for stars
+                    const starCheckY = Math.floor(worldY / 50);
+                    const starHash = (starCheckX * 18397) ^ (starCheckY * 39916801); // Basic hash
+                    if ((starHash % 250) === 0) { // Sparseness: 1 in 250 cells might have a star
+                       const starBrightness = 50 + (starHash % 50); // Dim stars
+                       r = Math.max(r, starBrightness); g = Math.max(g, starBrightness); b = Math.max(b, starBrightness);
+                    }
+                    return { r, g, b, a: 255 };
                 },
+                effects: { viscosityMultiplier: 0.8, forceFactorMultiplier: 0.9, },
                 spawnWeight: 0 
             },
-            NEBULA: {
+            NEBULA: { /* ... same, ensure time is used in colorFn ... */
                 label: "Nebula",
-                thresholdMin: -0.4, // Note: Using < thresholdMax in loop, so -0.4 is exclusive to VOID if checked first or inclusive here
+                thresholdMin: -0.4,
                 thresholdMax: 0.3,
-                colorFn: (noiseVal, worldX, worldY) => {
+                colorFn: (noiseVal, time, worldX, worldY, secondaryNoiseFn) => {
                     const intensity = (noiseVal - (-0.4)) / (0.3 - (-0.4));
-                    // Static patterns based on worldX/worldY, not time for the texture
                     return { 
-                        r: Math.floor(30 + intensity * 60 + Math.sin(worldX*0.015 + worldY*0.005)*10), 
-                        g: Math.floor(20 + intensity * 30 + Math.sin(worldY*0.015 + worldX*0.008)*10),
-                        b: Math.floor(50 + intensity * 90 + Math.sin((worldX+worldY)*0.008)*15),
+                        r: Math.floor(30 + intensity * 60 + Math.sin(worldX*0.01 + time*0.0005)*10), 
+                        g: Math.floor(20 + intensity * 30 + Math.sin(worldY*0.01 + time*0.0005)*10),
+                        b: Math.floor(50 + intensity * 90 + Math.sin((worldX+worldY)*0.005 + time*0.0005)*15),
                         a: 80 + Math.floor(intensity * 90) 
                     };
                 },
-                effects: {
-                    forceFactorMultiplier: 1.05,
-                },
+                effects: { forceFactorMultiplier: 1.05, },
                 spawnWeight: 5 
             },
             ASTEROID_FIELD: {
                 label: "Asteroid Field",
                 thresholdMin: 0.3,
                 thresholdMax: 0.7,
-                colorFn: (noiseVal, worldX, worldY) => {
-                    const intensity = (noiseVal - 0.3) / (0.7 - 0.3);
-                     // Add some subtle grain/texture using world coordinates
-                    const grain = Math.sin(worldX * 0.1) * Math.sin(worldY * 0.1) * 10;
+                colorFn: (noiseVal, time, worldX, worldY, secondaryNoiseFn) => {
+                     const intensity = (noiseVal - 0.3) / (0.7 - 0.3);
+                     // Add finer noise for texture
+                     const texNoise = secondaryNoiseFn(worldX / (noiseScale*0.2), worldY / (noiseScale*0.2)) * 0.5 + 0.5; // range 0-1
+                     const baseR = 60 + intensity * 20;
+                     const baseG = 55 + intensity * 15;
+                     const baseB = 50 + intensity * 10;
                     return {
-                        r: Math.max(0, Math.min(255, Math.floor(60 + intensity * 20 + grain))), 
-                        g: Math.max(0, Math.min(255, Math.floor(55 + intensity * 15 + grain))), 
-                        b: Math.max(0, Math.min(255, Math.floor(50 + intensity * 10 + grain))), 
+                        r: Math.floor(baseR * (0.8 + texNoise * 0.2)), 
+                        g: Math.floor(baseG * (0.8 + texNoise * 0.2)), 
+                        b: Math.floor(baseB * (0.8 + texNoise * 0.2)), 
                         a: 200 + Math.floor(intensity * 55) 
                     };
                 },
@@ -548,31 +581,29 @@
                 },
                 spawnWeight: 1 
             },
-            RADIATION_ZONE: {
+            RADIATION_ZONE: { /* ... same, ensure time is used in colorFn ... */
                 label: "Radiation Zone",
                 thresholdMin: 0.7,
-                // No thresholdMax, implies it goes to infinity (or max noise value)
-                colorFn: (noiseVal, worldX, worldY) => {
-                    // Static base color for texture, pulsing can be an overlay or particle effect
-                    const intensity = Math.min(1, (noiseVal - 0.7) / 0.3); // Intensity within a typical range above threshold
+                colorFn: (noiseVal, time, worldX, worldY, secondaryNoiseFn) => {
+                    const phase = Math.sin(time * 0.003 + noiseVal * 10 + worldX * 0.005 + worldY * 0.003) * 0.5 + 0.5; 
                     return {
-                        r: Math.floor(intensity * 20 + 10), 
-                        g: Math.floor(intensity * 100 + 40), 
-                        b: Math.floor(intensity * 20 + 10), 
-                        a: 180 + Math.floor(intensity * 50) 
+                        r: Math.floor(phase * 20 + 10), 
+                        g: Math.floor(phase * 130 + 40), 
+                        b: Math.floor(phase * 20 + 10), 
+                        a: 150 + Math.floor(phase * 50) 
                     };
                 },
                 effects: {
                     viscosityMultiplier: 1.05, 
                     mutationBoostFactor: 5.0,   
                     colorMutationBoostFactor: 7.0, 
-                    agePenalty: 0.08             
+                    agePenalty: 0.08          
                 },
                 spawnWeight: 0
             },
             DEFAULT_SPACE: { 
                 label: "Normal Space",
-                colorFn: (noiseVal, worldX, worldY) => ({ r: 17, g: 24, b: 39, a: 255 }), 
+                colorFn: (noiseVal, time, worldX, worldY, secondaryNoiseFn) => ({ r: 17, g: 24, b: 39, a: 255 }), 
                 effects: {
                     viscosityMultiplier: 1.0,
                     forceFactorMultiplier: 1.0,
@@ -581,55 +612,47 @@
             }
         };
 
-
-        let camera = { x: WORLD_WIDTH / 2, y: WORLD_HEIGHT / 2, zoom: 1 }; 
-        
+        let camera = { x: WORLD_WIDTH / 2, y: WORLD_HEIGHT / 2, zoom: 1 };
         let numParticles = 200; 
         let particleRadius = 2; 
         let numColors = 4;
         let forceFactor = 5000; 
-        let maxDist = 80; 
+        let maxDist = 80;
         let viscosity = 0.02; 
-        let simulationSpeed = 1; 
+        let simulationSpeed = 1;
         let maxForce = 1000; 
-        
-        let forceModel = 'inverseR'; 
-        let ljEquilibriumDistance = 40; 
-        let boundaryCondition = 'bounce'; 
-
-        let enableAgeDeath = false; 
+        let forceModel = 'inverseR';
+        let ljEquilibriumDistance = 40;
+        let boundaryCondition = 'bounce';
+        let enableAgeDeath = false;
         let maxParticleAge = 1000; 
-
-        let enableSplitting = false; 
-        let reproductionAgeFactor = 0.8; 
-        let reproductionChance = 0.5; 
+        let enableSplitting = false;
+        let reproductionAgeFactor = 0.8;
+        let reproductionChance = 0.5;
         let offspringCount = 1; 
-        let offspringVelocityBoost = 1.1; 
-        let enableColorMutation = false; 
+        let offspringVelocityBoost = 1.1;
+        let enableColorMutation = false;
         let mutationChance = 0.1; 
-
-        let heavyObjects = []; 
-        let enableGravityWells = false;
-        let numGravityWells = 1;
+        let heavyObjects = []; // Will store BlackHole instances
+        let enableGravityWells = false; // Now for Black Holes
+        let numGravityWells = 1;    // Num Black Holes
         let gravityWellMass = 100000;
         let gravityConstant = 0.5;
-        let gravityWellRadius = 10; 
-        let addWellOnClickMode = false; 
-
+        let gravityWellRadius = 10; // Event Horizon Radius for BH
+        let addWellOnClickMode = false;
         let enableBiomes = false; 
-
-        let settings = {
+        let settings = { /* ... same ... */
             enableAbsorptionExplosion: false, 
-            energyParticlesPerExplosion: 5, 
+            energyParticlesPerExplosion: 5,
             lifeExtensionPerEnergyParticle: 300, 
             energyParticleLifespan: 400,        
             energyParticleRadius: 1.5,
-            energyParticleColor: 'rgba(255, 255, 0, 0.85)', 
+            energyParticleColor: 'rgba(255, 255, 0, 0.85)',
             absorptionRadiusFactor: 2.0, 
             massGainPerEnergy: 0.05, 
             maxParticleMass: 5.0,    
             
-            ENERGY_SEEK_THRESHOLD_AGE_FACTOR: 0.7, 
+            ENERGY_SEEK_THRESHOLD_AGE_FACTOR: 0.7,
             FLEE_COOLDOWN: 120, 
             SEEK_COOLDOWN: 60,  
             DANGER_THRESHOLD: -0.5, 
@@ -637,19 +660,18 @@
             AI_SIGHT_RADIUS_MULTIPLIER: 1.5,
 
             enablePredatorPrey: false,
-            lifeGainFromHunt: 250, 
-            massGainFromHunt: 0.25, 
-            predatorSplitChanceOnHunt: 0.1, 
-            HUNTING_COOLDOWN: 90, 
+            lifeGainFromHunt: 250,
+            massGainFromHunt: 0.25,
+            predatorSplitChanceOnHunt: 0.1,
+            HUNTING_COOLDOWN: 90,
         };
-
-        let showTrails = true; 
-        let trailOpacity = 0.1; 
-        let particleGlow = true; 
+        let showTrails = true;
+        let trailOpacity = 0.1;
+        let particleGlow = true;
         let isPaused = false;
-        let stepMode = false; 
-        let selectedColorForAdding = 0; 
-        let brushModeActive = false; 
+        let stepMode = false;
+        let selectedColorForAdding = 0;
+        let brushModeActive = false;
         let isMouseDownForBrush = false;
         let isPanning = false;
         let lastPanX = 0, lastPanY = 0;
@@ -658,11 +680,14 @@
         let lastFpsUpdateTime = performance.now();
         const fpsDisplay = document.getElementById('fpsDisplay');
         const particleCountDisplay = document.getElementById('particleCount');
-        let controlConfigurations = []; 
-        let animationFrameId = null; 
-        const MAX_TOTAL_PARTICLES = 6000; 
+        const absorbedByBHCountDisplay = document.getElementById('absorbedByBHCount');
+        let totalAbsorbedByBH = 0;
 
-        class SpatialGrid {
+        let controlConfigurations = [];
+        let animationFrameId = null; 
+        const MAX_TOTAL_PARTICLES = 6000;
+
+        class SpatialGrid { /* ... same ... */ 
             constructor(width, height, cellSize) {
                 this.width = width; this.height = height;
                 this.cellSize = cellSize > 0 ? cellSize : 1; 
@@ -670,14 +695,14 @@
                 this.rows = Math.ceil(height / this.cellSize);
                 this.grid = new Array(this.cols * this.rows).fill(null).map(() => []);
             }
-            clear() { this.grid.forEach(cell => cell.length = 0); } 
+            clear() { this.grid.forEach(cell => cell.length = 0); }
             getCellIndex(x, y) {
                 const col = Math.max(0, Math.min(this.cols - 1, Math.floor(x / this.cellSize)));
                 const row = Math.max(0, Math.min(this.rows - 1, Math.floor(y / this.cellSize)));
                 return row * this.cols + col;
             }
             addParticle(particle) {
-                if (!particle || !particle.isAlive) return; 
+                if (!particle || !particle.isAlive) return;
                 const index = this.getCellIndex(particle.x, particle.y);
                 if (this.grid[index]) this.grid[index].push(particle);
             }
@@ -686,10 +711,10 @@
                 if (!particle || !particle.isAlive) return nearby;
                 const pCol = Math.floor(particle.x / this.cellSize);
                 const pRow = Math.floor(particle.y / this.cellSize);
-                for (let dRow = -1; dRow <= 1; dRow++) { 
+                for (let dRow = -1; dRow <= 1; dRow++) {
                     for (let dCol = -1; dCol <= 1; dCol++) {
                         const r = pRow + dRow, c = pCol + dCol;
-                        if (r >= 0 && r < this.rows && c >= 0 && c < this.cols) { 
+                        if (r >= 0 && r < this.rows && c >= 0 && c < this.cols) {
                             const index = r * this.cols + c;
                             if (this.grid[index]) nearby.push(...this.grid[index]);
                         }
@@ -698,43 +723,95 @@
                 return nearby;
             }
         }
-        let spatialGrid; 
+        let spatialGrid;
 
-        class HeavyObject {
-            constructor(x, y, mass, radius) {
-                this.x = x; this.y = y; this.mass = mass; this.radius = radius; 
-                this.color = '#E5E7EB'; 
+        class BlackHole { // Renamed from HeavyObject
+            constructor(x, y, mass, eventHorizonRadius) {
+                this.x = x; this.y = y; this.mass = mass; 
+                this.eventHorizonRadius = eventHorizonRadius; // Visual radius is now event horizon
+                this.absorbedParticles = 0;
+                this.lastAbsorbTime = 0;
+                this.pulseIntensity = 0;
             }
-            draw() {
+
+            draw(ctx, time) {
+                // Background distortion (subtle darkening)
+                ctx.save();
                 ctx.beginPath();
-                ctx.arc(this.x, this.y, this.radius, 0, Math.PI * 2);
-                ctx.fillStyle = this.color; ctx.fill();
+                ctx.arc(this.x, this.y, this.eventHorizonRadius * 3, 0, Math.PI * 2);
+                const gradDistort = ctx.createRadialGradient(this.x, this.y, this.eventHorizonRadius, this.x, this.y, this.eventHorizonRadius * 3);
+                gradDistort.addColorStop(0, 'rgba(0,0,0,0.3)');
+                gradDistort.addColorStop(0.5, 'rgba(0,0,0,0.1)');
+                gradDistort.addColorStop(1, 'rgba(0,0,0,0)');
+                ctx.fillStyle = gradDistort;
+                ctx.fill();
+                ctx.restore();
+
+                // Accretion Disk
+                const diskColor1 = `rgba(255, 220, 150, ${0.2 + this.pulseIntensity * 0.2})`;
+                const diskColor2 = `rgba(200, 180, 255, ${0.1 + this.pulseIntensity * 0.15})`;
+                
+                ctx.save();
+                ctx.lineWidth = this.eventHorizonRadius * 0.2;
+                for(let i=0; i < 3; i++) {
+                    ctx.beginPath();
+                    const radius = this.eventHorizonRadius * (1.2 + i * 0.3 + Math.sin(time * 0.0005 + i*0.5) * 0.05);
+                    const opacity = 0.3 - i*0.07 + this.pulseIntensity * 0.1;
+                    ctx.strokeStyle = i % 2 === 0 ? `rgba(255, 220, 150, ${opacity})` : `rgba(200, 180, 255, ${opacity})`;
+                    ctx.arc(this.x, this.y, radius, 0, Math.PI * 2);
+                    ctx.stroke();
+                }
+                ctx.restore();
+
+                // Event Horizon (Solid Black)
+                ctx.beginPath();
+                ctx.arc(this.x, this.y, this.eventHorizonRadius, 0, Math.PI * 2);
+                ctx.fillStyle = 'black';
+                ctx.fill();
+
+                // Update pulse
+                if (this.pulseIntensity > 0) {
+                    this.pulseIntensity -= 0.05; // Fade out pulse
+                }
+            }
+
+            absorb() {
+                this.absorbedParticles++;
+                this.lastAbsorbTime = performance.now();
+                this.pulseIntensity = 1.0; // Trigger pulse
+                totalAbsorbedByBH++;
+                if(absorbedByBHCountDisplay) absorbedByBHCountDisplay.textContent = totalAbsorbedByBH;
             }
         }
 
-        class Particle {
+
+        class Particle { /* ... same ... */
             constructor(x, y, color, type = 'normal', parentTraits = null) {
-                this.x = x; this.y = y; this.color = color; this.type = type; 
+                this.x = x; this.y = y; this.color = color; this.type = type;
                 this.isAlive = true; this.age = 0;
+
                 this.individualMaxAge = maxParticleAge;
                 this.individualForceFactor = forceFactor;
                 this.individualAbsorptionRadiusFactor = settings.absorptionRadiusFactor;
                 this.ruleModifiers = {}; 
                 this.mass = 1.0; 
                 this.baseRadius = particleRadius; 
+
                 this.state = 'idle'; 
                 this.stateTicks = 0; 
                 this.targetParticle = null; 
-                this.currentViscosityMultiplier = 1.0; 
-                this.currentForceFactorMultiplier = 1.0; 
+
+                this.currentViscosityMultiplier = 1.0;
+                this.currentForceFactorMultiplier = 1.0;
                 this.inRadiationZone = false; 
+
                 this.isPredator = false;
                 this.huntsColor = null; 
 
                 if (this.type === 'energy') {
-                    this.vx = (Math.random() - 0.5) * 10; this.vy = (Math.random() - 0.5) * 10; 
+                    this.vx = (Math.random() - 0.5) * 10; this.vy = (Math.random() - 0.5) * 10;
                     this.radius = settings.energyParticleRadius; 
-                    this.energyValue = settings.lifeExtensionPerEnergyParticle; 
+                    this.energyValue = settings.lifeExtensionPerEnergyParticle;
                     this.maxAge = settings.energyParticleLifespan; 
                 } else { 
                     this.vx = (Math.random() - 0.5) * 40; this.vy = (Math.random() - 0.5) * 40;
@@ -749,75 +826,62 @@
                         this.ruleModifiers = { ...parentTraits.ruleModifiers }; 
                         this.isPredator = parentTraits.isPredator;
                         this.huntsColor = parentTraits.huntsColor;
-                        // Note: inRadiationZone is determined dynamically by applyBiomeEffects, not inherited directly for status.
-                        // However, if parent was in radiation and split, the mutation chance for THAT split event uses parent's status.
-                        
-                        let traitMutationRate = mutationChance;
-                        let colorMutationRate = mutationChance;
+                        this.inRadiationZone = parentTraits.inRadiationZone; 
 
-                        if (parentTraits.inRadiationZone && settings.enableAbsorptionExplosion) { // Check parent's radiation status at time of split
+                        let traitMutationDynamicChance = mutationChance;
+                        // let colorMutationDynamicChance = mutationChance; // Color mutation handled in split
+
+                        if (this.inRadiationZone && settings.enableAbsorptionExplosion) {
                             const radBiomeEffects = BIOME_SETTINGS.RADIATION_ZONE.effects;
                             if (radBiomeEffects.mutationBoostFactor) {
-                                traitMutationRate = Math.min(1.0, mutationChance * radBiomeEffects.mutationBoostFactor);
+                                traitMutationDynamicChance = Math.min(1.0, mutationChance * radBiomeEffects.mutationBoostFactor);
                             }
-                            if (radBiomeEffects.colorMutationBoostFactor) {
-                                colorMutationRate = Math.min(1.0, mutationChance * radBiomeEffects.colorMutationBoostFactor);
-                            }
+                             // if (radBiomeEffects.colorMutationBoostFactor) { // This logic moved to split()
+                             //    colorMutationDynamicChance = Math.min(1.0, mutationChance * radBiomeEffects.colorMutationBoostFactor);
+                            // }
                         }
                         
                         const MUTATION_STRENGTH_AGE = 50; 
                         const MUTATION_STRENGTH_FORCE = 100; 
                         const MUTATION_STRENGTH_ABSORPTION = 0.1;
-                        const MUTATION_STRENGTH_RULE = 0.05; 
+                        const MUTATION_STRENGTH_RULE = 0.05;
                         const MUTATION_STRENGTH_BASERADIUS = 0.2;
 
-                        if (Math.random() < traitMutationRate) {
+                        if (Math.random() < traitMutationDynamicChance) {
                             this.individualMaxAge += (Math.random() * 2 - 1) * MUTATION_STRENGTH_AGE;
                             this.individualMaxAge = Math.max(100, this.individualMaxAge); 
                         }
-                        if (Math.random() < traitMutationRate) {
+                        if (Math.random() < traitMutationDynamicChance) {
                             this.individualForceFactor += (Math.random() * 2 - 1) * MUTATION_STRENGTH_FORCE;
                             this.individualForceFactor = Math.max(100, this.individualForceFactor); 
                         }
-                        if (Math.random() < traitMutationRate) {
+                        if (Math.random() < traitMutationDynamicChance) {
                             this.individualAbsorptionRadiusFactor += (Math.random() * 2 - 1) * MUTATION_STRENGTH_ABSORPTION;
                             this.individualAbsorptionRadiusFactor = Math.max(1.0, this.individualAbsorptionRadiusFactor);
                         }
-                         if (Math.random() < traitMutationRate) {
+                         if (Math.random() < traitMutationDynamicChance) {
                             this.baseRadius += (Math.random() * 2 - 1) * MUTATION_STRENGTH_BASERADIUS;
                             this.baseRadius = Math.max(0.5, this.baseRadius); 
                         }
-                        if (Math.random() < traitMutationRate && numColors > 0) {
+                        if (Math.random() < traitMutationDynamicChance && numColors > 0) {
                             const targetColorToMutate = Math.floor(Math.random() * numColors);
                             const currentModifier = this.ruleModifiers[targetColorToMutate] || 0;
                             this.ruleModifiers[targetColorToMutate] = currentModifier + (Math.random() * 2 - 1) * MUTATION_STRENGTH_RULE;
-                            this.ruleModifiers[targetColorToMutate] = Math.max(-0.5, Math.min(0.5, this.ruleModifiers[targetColorToMutate])); 
+                            this.ruleModifiers[targetColorToMutate] = Math.max(-0.5, Math.min(0.5, this.ruleModifiers[targetColorToMutate]));
                         }
                         if (settings.enablePredatorPrey) {
-                            if (Math.random() < traitMutationRate) { 
-                                this.isPredator = !this.isPredator; 
+                            if (Math.random() < traitMutationDynamicChance) { 
+                                this.isPredator = !this.isPredator;
                             }
-                            if (this.isPredator && Math.random() < traitMutationRate && numColors > 1) { 
+                            if (this.isPredator && Math.random() < traitMutationDynamicChance && numColors > 1) { 
                                 let newHuntsColor = Math.floor(Math.random() * numColors);
                                 while (newHuntsColor === this.color && numColors > 1) { 
                                     newHuntsColor = Math.floor(Math.random() * numColors);
                                 }
                                 this.huntsColor = newHuntsColor;
                             }
-                            if (!this.isPredator) this.huntsColor = null; 
+                            if (!this.isPredator) this.huntsColor = null;
                         }
-                         // Color mutation uses its specific rate
-                        if (enableColorMutation && Math.random() < colorMutationRate) {
-                            if (numColors > 1) {
-                                let newColor = this.color;
-                                while (newColor === this.color) {
-                                    newColor = Math.floor(Math.random() * numColors);
-                                }
-                                this.color = newColor; // Offspring gets the new color directly
-                            }
-                        }
-
-
                     } else { 
                         if (settings.enablePredatorPrey && Math.random() < 0.05 && numColors > 1) { 
                             this.isPredator = true;
@@ -831,52 +895,45 @@
                     this.radius = Math.max(1, this.radius); 
                 }
             }
-
-            draw() { 
+            draw() { /* ... same particle draw, ensure shadowColor is reset if particleGlow is false ... */
                 if (!this.isAlive) return;
                 let fillColor;
-                let currentRadius = this.radius; 
+                let currentRadius = this.radius;
                 let currentShadowBlur = 0;
-                let currentShadowColor = 'transparent';
+                let currentShadowColor = 'transparent'; // Default no shadow
 
                 if (this.type === 'energy') {
-                    const pulseFactor = 0.8 + Math.sin(this.age * 0.1 + performance.now()*0.001) * 0.2; // Add current time for continuous pulse
-                    currentRadius = settings.energyParticleRadius * pulseFactor; 
-                    fillColor = settings.energyParticleColor; 
-                    if (particleGlow) { 
-                        currentShadowColor = settings.energyParticleColor; 
-                        currentShadowBlur = 6 + Math.sin(this.age * 0.1 + performance.now()*0.001) * 2; // Pulsating glow
+                    const pulseFactor = 0.8 + Math.sin(this.age * 0.1) * 0.2;
+                    currentRadius = settings.energyParticleRadius * pulseFactor;
+                    fillColor = settings.energyParticleColor;
+                    if (particleGlow) {
+                        currentShadowColor = settings.energyParticleColor;
+                        currentShadowBlur = 6;
                     }
-                } else { 
+                } else {
                     fillColor = COLORS[this.color % COLORS.length];
                     if (particleGlow) {
                         currentShadowColor = fillColor;
                         currentShadowBlur = 8;
-                         // If in radiation zone, make glow pulse slightly
-                        if (this.inRadiationZone) {
-                           currentShadowBlur = 8 + Math.sin(performance.now() * 0.005 + this.x * 0.1) * 4;
-                        }
                     }
                 }
                 ctx.beginPath();
                 ctx.arc(this.x, this.y, currentRadius, 0, Math.PI * 2);
                 ctx.fillStyle = fillColor;
-                ctx.shadowColor = currentShadowColor;
-                ctx.shadowBlur = currentShadowBlur;
+                ctx.shadowColor = currentShadowColor; // Apply shadow if particleGlow is true
+                ctx.shadowBlur = currentShadowBlur;  // Apply blur if particleGlow is true
                 ctx.fill();
 
                 if (settings.enablePredatorPrey && this.isPredator && this.type === 'normal') {
-                    ctx.strokeStyle = 'rgba(255,50,50,0.8)'; 
-                    ctx.lineWidth = Math.max(0.5, 2 / camera.zoom); 
-                    ctx.stroke(); 
+                    ctx.strokeStyle = 'rgba(255,50,50,0.8)';
+                    ctx.lineWidth = Math.max(0.5, 2 / camera.zoom);
+                    ctx.stroke();
                 }
-
-                if (currentShadowBlur > 0) { 
-                    ctx.shadowColor = 'transparent';
-                    ctx.shadowBlur = 0;
-                }
+                // Crucial: Reset shadow for subsequent drawing operations that shouldn't have this particle's glow
+                ctx.shadowColor = 'transparent';
+                ctx.shadowBlur = 0;
             }
-            explode() { 
+            explode() { /* ... same ... */ 
                 if (this.type !== 'normal' || !this.isAlive) return [];
                 this.isAlive = false; 
                 let createdEnergyParticles = [];
@@ -892,7 +949,7 @@
                 }
                 return createdEnergyParticles;
             }
-            absorb(energyParticle) { 
+            absorb(energyParticle) { /* ... same ... */ 
                 if (this.type !== 'normal' || energyParticle.type !== 'energy' || !this.isAlive || !energyParticle.isAlive) return;
                 this.age = Math.max(0, this.age - energyParticle.energyValue); 
                 energyParticle.isAlive = false;
@@ -903,7 +960,7 @@
                     this.radius = Math.max(1, this.radius); 
                 }
             }
-            split() { 
+            split() { /* ... same, ensure colorMutationDynamicChance uses inRadiationZone ... */ 
                 let newOffspring = [];
                 const actualOffspringCount = Math.max(1, offspringCount); 
                 const parentTraitsForOffspring = {
@@ -915,16 +972,33 @@
                     baseRadius: this.baseRadius,
                     isPredator: this.isPredator,
                     huntsColor: this.huntsColor,
-                    inRadiationZone: this.inRadiationZone // Pass current radiation status for mutation check during split
+                    inRadiationZone: this.inRadiationZone 
                 };
                 for (let i = 0; i < actualOffspringCount; i++) {
                     if (particles.length + newOffspring.length >= MAX_TOTAL_PARTICLES) break;
                     const offspringX = this.x + (Math.random() - 0.5) * this.radius * 4;
                     const offspringY = this.y + (Math.random() - 0.5) * this.radius * 4;
                     
-                    // Color is handled by constructor based on parentTraits.inRadiationZone
+                    let offspringColor = this.color;
+                    let colorMutDynamicChance = mutationChance; // Base chance
+                     if (this.inRadiationZone && settings.enableAbsorptionExplosion) {
+                        const radBiomeEffects = BIOME_SETTINGS.RADIATION_ZONE.effects;
+                         if (radBiomeEffects.colorMutationBoostFactor) {
+                            colorMutDynamicChance = Math.min(1.0, mutationChance * radBiomeEffects.colorMutationBoostFactor);
+                        }
+                    }
+
+                    if (enableColorMutation && Math.random() < colorMutDynamicChance) { 
+                        if (numColors > 1) {
+                            let newColor = this.color;
+                            while (newColor === this.color) { 
+                                newColor = Math.floor(Math.random() * numColors);
+                            }
+                            offspringColor = newColor;
+                        }
+                    }
                     const offspring = new Particle(
-                        offspringX, offspringY, this.color, 'normal', parentTraitsForOffspring 
+                        offspringX, offspringY, offspringColor, 'normal', parentTraitsForOffspring 
                     );
                     offspring.vx = this.vx * offspringVelocityBoost * (Math.random() * 0.4 + 0.8); 
                     offspring.vy = this.vy * offspringVelocityBoost * (Math.random() * 0.4 + 0.8);
@@ -933,8 +1007,7 @@
                 this.isAlive = false; 
                 return newOffspring;
             }
-            
-            applyBiomeEffects() {
+            applyBiomeEffects() { /* ... same ... */ 
                 this.currentViscosityMultiplier = 1.0; 
                 this.currentForceFactorMultiplier = 1.0; 
                 this.inRadiationZone = false; 
@@ -968,26 +1041,28 @@
                             activeBiome.effects.forceFactorMultiplier(noiseVal) : activeBiome.effects.forceFactorMultiplier;
                     }
                     if (activeBiome.label === "Radiation Zone") { 
-                        this.inRadiationZone = true;
-                        if (settings.enableAbsorptionExplosion && activeBiome.effects.agePenalty) {
-                            this.age += activeBiome.effects.agePenalty;
-                        }
+                         this.inRadiationZone = true;
+                         if (settings.enableAbsorptionExplosion && activeBiome.effects.agePenalty) {
+                             this.age += activeBiome.effects.agePenalty;
+                         }
                     }
                 }
             }
-
-            executeBehavior(dt, nearbyParticles) { // Changed allParticles to nearbyParticles
-                if (!this.isAlive || this.type !== 'normal' ) return; 
+            executeBehavior(dt, allParticles) { /* ... same (uses spatialGrid now) ... */ 
+                 if (!this.isAlive || this.type !== 'normal' ) return; 
                 
                 const AI_SEEK_FORCE = settings.AI_SEEK_FORCE_MULTIPLIER * this.individualForceFactor;
                 const AI_SIGHT_RADIUS = maxDist * settings.AI_SIGHT_RADIUS_MULTIPLIER; 
+                const nearbyParticlesToSearch = spatialGrid ? spatialGrid.getNearbyParticles(this) : allParticles;
+
 
                 if (this.state === 'seeking_energy' && settings.enableAbsorptionExplosion) { 
                     if (!this.targetParticle || !this.targetParticle.isAlive) {
                         let closestEnergy = null;
                         let minDistSq = AI_SIGHT_RADIUS * AI_SIGHT_RADIUS;
-                        for (const p of nearbyParticles) { // Use nearbyParticles
-                            if (p.isAlive && p.type === 'energy' && p !== this) {
+                        for (const p of nearbyParticlesToSearch) {
+                            if (p === this || !p.isAlive) continue;
+                            if (p.type === 'energy') {
                                 const dx = p.x - this.x; const dy = p.y - this.y;
                                 const dSq = dx * dx + dy * dy;
                                 if (dSq < minDistSq) { minDistSq = dSq; closestEnergy = p; }
@@ -1019,28 +1094,42 @@
                      if (!this.targetParticle || !this.targetParticle.isAlive || this.targetParticle.color !== this.huntsColor) {
                         let closestPrey = null;
                         let minDistSq = AI_SIGHT_RADIUS * AI_SIGHT_RADIUS;
-                        for (const p of nearbyParticles) { // Use nearbyParticles
-                            if (p.isAlive && p.type === 'normal' && p.color === this.huntsColor && p !== this && !p.isPredator) {
-                                const dx = p.x - this.x; const dy = p.y - this.y;
+                        for (const p of nearbyParticlesToSearch) {
+                            if (p === this || !p.isAlive) continue;
+                            if (p.type === 'normal' && p.color === this.huntsColor && !p.isPredator) {
+                                const dx = p.x - this.x;
+                                const dy = p.y - this.y;
                                 const dSq = dx * dx + dy * dy;
-                                if (dSq < minDistSq) { minDistSq = dSq; closestPrey = p; }
+                                if (dSq < minDistSq) {
+                                    minDistSq = dSq;
+                                    closestPrey = p;
+                                }
                             }
                         }
                         this.targetParticle = closestPrey;
-                        if (!this.targetParticle) { this.state = 'idle'; this.stateTicks = 0;}
+                        if (!this.targetParticle) { 
+                            this.state = 'idle'; 
+                            this.stateTicks = 0;
+                        }
                     }
                     if (this.targetParticle && this.targetParticle.isAlive) {
-                        const dx = this.targetParticle.x - this.x; const dy = this.targetParticle.y - this.y;
+                        const dx = this.targetParticle.x - this.x;
+                        const dy = this.targetParticle.y - this.y;
                         const dist = Math.sqrt(dx * dx + dy * dy);
                         if (dist > this.radius + this.targetParticle.radius) { 
                             const moveX = (dx / dist) * AI_SEEK_FORCE / this.mass;
                             const moveY = (dy / dist) * AI_SEEK_FORCE / this.mass;
-                            this.vx += moveX * dt * simulationSpeed; this.vy += moveY * dt * simulationSpeed;
+                            this.vx += moveX * dt * simulationSpeed;
+                            this.vy += moveY * dt * simulationSpeed;
                         }
-                    } else { this.state = 'was_hunting'; this.targetParticle = null; this.stateTicks = 0; }
+                    } else { 
+                        this.state = 'was_hunting'; 
+                        this.targetParticle = null;
+                        this.stateTicks = 0;
+                    }
                 }
             }
-            update(dt, nearbyParticlesForAI) { // Pass nearbyParticles for AI
+            update(dt, allParticles) { /* ... same ... */ 
                 if (!this.isAlive) return { newParticlesFromSplit: null, shouldExplode: false };
                 if (this.type === 'normal') { this.applyBiomeEffects(); } 
                 this.age++;
@@ -1069,10 +1158,12 @@
                         (this.state === 'idle' || (this.state === 'was_hunting' && this.stateTicks > settings.HUNTING_COOLDOWN)) &&
                         this.state !== 'fleeing' && this.state !== 'seeking_energy'
                         ) {
-                        this.state = 'hunting'; this.targetParticle = null; this.stateTicks = 0;
+                        this.state = 'hunting';
+                        this.targetParticle = null; 
+                        this.stateTicks = 0;
                     }
 
-                    this.executeBehavior(dt, nearbyParticlesForAI); // Pass relevant nearby particles
+                    this.executeBehavior(dt, allParticles);
                     if (enableSplitting && this.age >= this.individualMaxAge * reproductionAgeFactor && this.age < this.individualMaxAge) {
                         if (Math.random() < reproductionChance) {
                             newParticlesFromSplit = this.split(); 
@@ -1118,7 +1209,7 @@
                 }
                 return { newParticlesFromSplit, shouldExplode: shouldExplodeFlag };
             }
-            interact(otherParticle, ruleValue, dt) { 
+            interact(otherParticle, ruleValue, dt) { /* ... same ... */ 
                 if (!this.isAlive || !otherParticle.isAlive || this.type === 'energy' || otherParticle.type === 'energy') return;
                 const dx = otherParticle.x - this.x; const dy = otherParticle.y - this.y;
                 const distSq = dx * dx + dy * dy;
@@ -1166,82 +1257,67 @@
                 }
             }
         }
-
-function toggleFullScreen() {
-    const controlPanel = document.querySelector('.control-panel');
-    const fullscreenBtn = document.getElementById('fullscreenBtn');
-    if (!document.fullscreenElement) {
-        document.documentElement.requestFullscreen().catch(err => {
-            showToast(`Error enabling full-screen: ${err.message}`);
-        });
-        if (fullscreenBtn) fullscreenBtn.textContent = 'Exit Fullscreen';
-        if (controlPanel && !controlPanel.classList.contains('hidden')) {
-            controlPanel.classList.add('hidden');
-            controlPanel.dataset.hiddenByFullscreen = 'true'; 
-        }
-    } else {
-        if (document.exitFullscreen) {
-            document.exitFullscreen();
-            if (fullscreenBtn) fullscreenBtn.textContent = 'Fullscreen';
-            if (controlPanel && controlPanel.dataset.hiddenByFullscreen === 'true' && !controlPanel.dataset.hiddenByKey) {
-                controlPanel.classList.remove('hidden');
+        function toggleFullScreen() { /* ... same ... */ 
+            if (!document.fullscreenElement) {
+                document.documentElement.requestFullscreen().catch(err => {
+                    alert(`Error attempting to enable full-screen mode: ${err.message} (${err.name})`);
+                });
+            } else {
+                if (document.exitFullscreen) {
+                    document.exitFullscreen();
+                }
             }
-            if (controlPanel) controlPanel.removeAttribute('data-hidden-by-fullscreen');
         }
-    }
-    setTimeout(resizeCanvas, 150); 
-}
-
-function toggleSidebarVisibility() {
-    const controlPanel = document.querySelector('.control-panel');
-    if (controlPanel) {
-        const isHidden = controlPanel.classList.contains('hidden');
-        if (isHidden) {
-            controlPanel.classList.remove('hidden');
-            controlPanel.removeAttribute('data-hidden-by-key'); 
-             if(document.fullscreenElement) controlPanel.dataset.hiddenByFullscreen = 'false';
-            showToast("Sidebar Shown");
-        } else {
-            controlPanel.classList.add('hidden');
-            controlPanel.setAttribute('data-hidden-by-key', 'true'); 
-            showToast("Sidebar Hidden (Press 'h' to show)");
+        function toggleSidebarVisibility() { /* ... same ... */
+            const controlPanel = document.querySelector('.control-panel');
+            if (controlPanel) {
+                const isHiddenByHKey = controlPanel.classList.contains('hidden-by-h-key');
+        
+                if (isHiddenByHKey) { 
+                    controlPanel.classList.remove('hidden-by-h-key');
+                    controlPanel.classList.remove('minimized-for-fullscreen'); 
+                    controlPanel.classList.remove('fully-expanded-in-fullscreen');
+                    controlPanel.removeAttribute('data-minimized-by-fullscreen'); 
+                    showToast("Sidebar Shown");
+                } else { 
+                    controlPanel.classList.add('hidden-by-h-key');
+                    controlPanel.classList.remove('minimized-for-fullscreen'); 
+                    controlPanel.classList.remove('fully-expanded-in-fullscreen');
+                    controlPanel.removeAttribute('data-minimized-by-fullscreen');
+                    showToast("Sidebar Hidden (Press 'h' to show)");
+                }
+                setTimeout(resizeCanvas, 50);
+            }
         }
-        setTimeout(resizeCanvas, 50); 
-    }
-}
-
-function startAnimationLoop() { 
-    if (animationFrameId === null) { 
-        lastFrameTime = performance.now(); 
-        animationFrameId = requestAnimationFrame(animationLoop);
-    }
-}
-function stopAnimationLoop() { 
-     if (animationFrameId !== null) {
-        cancelAnimationFrame(animationFrameId);
-        animationFrameId = null;
-    }
-}
-        // --- Offscreen Canvas for Noise Biome Texture ---
-        function initializeOffscreenNoiseCanvas() {
+        function startAnimationLoop() { /* ... same ... */ 
+            if (animationFrameId === null) {
+                lastFrameTime = performance.now();
+                animationFrameId = requestAnimationFrame(animationLoop);
+            }
+        }
+        function stopAnimationLoop() { /* ... same ... */
+             if (animationFrameId !== null) {
+                cancelAnimationFrame(animationFrameId);
+                animationFrameId = null;
+            }
+        }
+        function initializeOffscreenNoiseCanvas() { /* ... same ... */
             if (!offscreenNoiseCanvas) {
                 offscreenNoiseCanvas = document.createElement('canvas');
-                offscreenNoiseCtx = offscreenNoiseCanvas.getContext('2d', {willReadFrequently: true}); // willReadFrequently can be an optimization hint
+                offscreenNoiseCtx = offscreenNoiseCanvas.getContext('2d');
             }
-            // Resize if necessary, and flag for update
             if (offscreenNoiseCanvas.width !== WORLD_WIDTH || offscreenNoiseCanvas.height !== WORLD_HEIGHT) {
                 offscreenNoiseCanvas.width = WORLD_WIDTH;
                 offscreenNoiseCanvas.height = WORLD_HEIGHT;
-                worldNoiseNeedsUpdate = true; // Force re-render if size changes
+                worldNoiseNeedsUpdate = true;
             }
         }
-
-        function updateWorldNoiseTexture() {
+        function updateWorldNoiseTexture() { /* ... same, ensure secondaryNoiseFn is passed to colorFn ... */ 
             if (!enableBiomes || !noiseGenerator || !offscreenNoiseCtx) return;
-            // console.log("Rendering full world noise texture..."); // For debugging
             const imageData = offscreenNoiseCtx.createImageData(WORLD_WIDTH, WORLD_HEIGHT);
             const data = imageData.data;
-            // const time = performance.now(); // Only use time if colorFn is designed for static patterns based on a "bake time"
+            const time = performance.now();
+            const secondaryNoiseFn = (x,y) => noiseGenerator.noise(x,y); // Simple pass-through for now
 
             for (let wy = 0; wy < WORLD_HEIGHT; wy++) {
                 for (let wx = 0; wx < WORLD_WIDTH; wx++) {
@@ -1258,45 +1334,38 @@ function stopAnimationLoop() {
                             break;
                         }
                     }
-                    
-                    const colorObj = activeBiome.colorFn(noiseVal, wx, wy); // Pass wx, wy for potential patterns
+                    const colorData = activeBiome.colorFn(noiseVal, time, wx, wy, secondaryNoiseFn);
                     const idx = (wy * WORLD_WIDTH + wx) * 4;
-                    data[idx] = colorObj.r;
-                    data[idx + 1] = colorObj.g;
-                    data[idx + 2] = colorObj.b;
-                    data[idx + 3] = colorObj.a;
+                    data[idx] = colorData.r; data[idx+1] = colorData.g; data[idx+2] = colorData.b; data[idx+3] = colorData.a;
                 }
             }
             offscreenNoiseCtx.putImageData(imageData, 0, 0);
-            worldNoiseNeedsUpdate = false; // Texture is now up-to-date
-            // console.log("Full world noise texture rendered."); // For debugging
+            worldNoiseNeedsUpdate = false;
         }
-
-
-        function initializeBiomes() { 
+        function initializeBiomes() { /* ... same ... */
             if (enableBiomes) {
-                if (!noiseGenerator) { 
+                if (!noiseGenerator) {
                     noiseGenerator = new PerlinNoise(noiseSeed);
                 } else {
                     noiseGenerator.seed(noiseSeed); 
                 }
-                worldNoiseNeedsUpdate = true; // Flag that the offscreen texture needs to be redrawn
+                initializeOffscreenNoiseCanvas(); 
+                worldNoiseNeedsUpdate = true; 
                 showToast("Noise-based biomes initialized.");
             } else {
                 showToast("Biomes Disabled.");
             }
             updateConditionalControls(); 
         }
-
-        function generateColors(count) { 
+        function generateColors(count) { /* ... same ... */
             COLORS = [];
             for (let i = 0; i < count; i++) {
-                const hue = (i * 360 / count) % 360; 
-                COLORS.push(`hsl(${hue}, 100%, 70%)`); 
+                const hue = (i * 360 / count) % 360;
+                COLORS.push(`hsl(${hue}, 100%, 70%)`);
             }
-            updateColorPicker(); 
+            updateColorPicker();
         }
-        function initializeRules() { 
+        function initializeRules() { /* ... same ... */
             rules = [];
             for (let i = 0; i < numColors; i++) {
                 rules[i] = [];
@@ -1304,28 +1373,30 @@ function stopAnimationLoop() {
                     rules[i][j] = (Math.random() * 2 - 1) * 0.2; 
                 }
             }
-            buildRuleEditor(); 
+            buildRuleEditor();
         }
-        function createParticles() { 
+        function createParticles() { /* ... same ... */
             particles = [];
             for (let i = 0; i < numParticles; i++) { 
-                const x = Math.random() * WORLD_WIDTH; 
+                const x = Math.random() * WORLD_WIDTH;
                 const y = Math.random() * WORLD_HEIGHT;
-                const color = Math.floor(Math.random() * numColors); 
+                const color = Math.floor(Math.random() * numColors);
                 particles.push(new Particle(x, y, color, 'normal')); 
             }
             if(particleCountDisplay) particleCountDisplay.textContent = particles.length;
         }
-        function createGravityWells() { 
+        function createGravityWells() { // Now Black Holes
             heavyObjects = [];
             if (!enableGravityWells || numGravityWells <= 0) return;
             for (let i = 0; i < numGravityWells; i++) {
                 const x = Math.random() * WORLD_WIDTH;
                 const y = Math.random() * WORLD_HEIGHT;
-                heavyObjects.push(new HeavyObject(x, y, gravityWellMass, gravityWellRadius));
+                heavyObjects.push(new BlackHole(x, y, gravityWellMass, gravityWellRadius));
             }
+            totalAbsorbedByBH = 0; // Reset counter
+            if(absorbedByBHCountDisplay) absorbedByBHCountDisplay.textContent = totalAbsorbedByBH;
         }
-        function updateConditionalControls() { 
+        function updateConditionalControls() { /* ... same ... */
             const getEl = id => document.getElementById(id);
             const setHidden = (el, hide) => el ? (hide ? el.classList.add('hidden') : el.classList.remove('hidden')) : null;
             
@@ -1338,7 +1409,7 @@ function stopAnimationLoop() {
             setHidden(getEl('predatorPreyParamsContainer'), !settings.enablePredatorPrey);
             setHidden(getEl('biomeNoiseParamsContainer'), !enableBiomes); 
         }
-        function resetSimulation() { 
+        function resetSimulation() { /* ... same, ensure totalAbsorbedByBH is reset ... */
             isPaused = false; 
             const pauseButton = document.getElementById('pauseResumeBtn');
             if(pauseButton) pauseButton.textContent = 'Pause';
@@ -1347,7 +1418,7 @@ function stopAnimationLoop() {
                  if (inputElement) {
                      let val;
                      if (inputElement.type === 'checkbox') val = inputElement.checked;
-                     else if (config.isInt) val = parseInt(inputElement.value); 
+                     else if (config.isInt) val = parseInt(inputElement.value);
                      else if (inputElement.type === 'range' || inputElement.type === 'number') val = parseFloat(inputElement.value);
                      else if (inputElement.tagName === 'SELECT') val = inputElement.value;
                      else val = inputElement.value; 
@@ -1357,9 +1428,12 @@ function stopAnimationLoop() {
             updateConditionalControls(); 
             generateColors(numColors);
             initializeRules();
-            initializeBiomes(); // This will set worldNoiseNeedsUpdate = true if biomes enabled
+            initializeBiomes(); 
             createParticles(); 
             createGravityWells(); 
+            totalAbsorbedByBH = 0; // Reset here
+            if(absorbedByBHCountDisplay) absorbedByBHCountDisplay.textContent = totalAbsorbedByBH;
+
             const currentMaxDist = maxDist > 0 ? maxDist : 80; 
             spatialGrid = new SpatialGrid(WORLD_WIDTH, WORLD_HEIGHT, currentMaxDist);
             if (spatialGrid) { 
@@ -1369,35 +1443,30 @@ function stopAnimationLoop() {
            camera.x = WORLD_WIDTH / 2; camera.y = WORLD_HEIGHT / 2;
            const zoomSlider = document.getElementById('zoomLevel');
            const zoomValueDisplay = document.getElementById('zoomLevelValue');
-           if (zoomSlider) { 
-                camera.zoom = parseFloat(zoomSlider.value); 
-           } else { camera.zoom = 1; } 
+           if (zoomSlider) zoomSlider.value = camera.zoom; 
            if (zoomValueDisplay) zoomValueDisplay.textContent = camera.zoom.toFixed(2);
-           
            showToast("Simulation Reset & Running!");
            stopAnimationLoop(); startAnimationLoop(); 
        }
-       function getMousePos(event) { 
+       function getMousePos(event) { /* ... same ... */
            const rect = canvas.getBoundingClientRect();
            let clientX, clientY;
-           if (event.touches && event.touches.length > 0) { 
+           if (event.touches && event.touches.length > 0) {
                clientX = event.touches[0].clientX; clientY = event.touches[0].clientY;
            } else if (event.clientX !== undefined) { 
                clientX = event.clientX; clientY = event.clientY;
-           } else { return { x: camera.x, y: camera.y }; } 
-           const canvasMouseX = clientX - rect.left; 
-           const canvasMouseY = clientY - rect.top;  
+           } else { return { x: camera.x, y: camera.y }; }
+           const canvasMouseX = clientX - rect.left; const canvasMouseY = clientY - rect.top;
            const worldX = camera.x + (canvasMouseX - canvas.width / 2) / camera.zoom;
            const worldY = camera.y + (canvasMouseY - canvas.height / 2) / camera.zoom;
            return { x: worldX, y: worldY };
        }
-        function buildRuleEditor() { 
+        function buildRuleEditor() { /* ... same ... */
             const editorDiv = document.getElementById('ruleEditor');
             if (!editorDiv) return;
             editorDiv.innerHTML = ''; 
             const table = document.createElement('table'); const tbody = document.createElement('tbody');
-            const headerRow = document.createElement('tr'); 
-            const thEmpty = document.createElement('th'); 
+            const headerRow = document.createElement('tr'); const thEmpty = document.createElement('th'); 
             headerRow.appendChild(thEmpty);
             for (let j = 0; j < numColors; j++) {
                 const th = document.createElement('th');
@@ -1415,8 +1484,8 @@ function stopAnimationLoop() {
                 for (let j = 0; j < numColors; j++) {
                     const cell = document.createElement('td');
                     const ruleValue = (rules[i] && typeof rules[i][j] !== 'undefined') ? rules[i][j] : 0;
-                    cell.textContent = ruleValue.toFixed(2); 
-                    cell.dataset.row = i; cell.dataset.col = j; 
+                    cell.textContent = ruleValue.toFixed(2);
+                    cell.dataset.row = i; cell.dataset.col = j;
                     if (ruleValue > 0) cell.style.color = '#6ee7b7'; 
                     else if (ruleValue < 0) cell.style.color = '#f87171'; 
                     else cell.style.color = '#9ca3af'; 
@@ -1424,10 +1493,10 @@ function stopAnimationLoop() {
                         const cycleValues = [-1.0, -0.5, -0.2, 0, 0.2, 0.5, 1.0]; 
                         let currentRuleVal = (rules[i] && typeof rules[i][j] !== 'undefined') ? rules[i][j] : 0;
                         currentRuleVal = parseFloat(currentRuleVal.toFixed(2)); 
-                        let currentIndex = cycleValues.findIndex(v => Math.abs(v - currentRuleVal) < 0.001); 
+                        let currentIndex = cycleValues.findIndex(v => Math.abs(v - currentRuleVal) < 0.001);
                         if (currentIndex === -1) currentIndex = cycleValues.indexOf(0); 
-                        rules[i][j] = cycleValues[(currentIndex + 1) % cycleValues.length]; 
-                        cell.textContent = rules[i][j].toFixed(2); 
+                        rules[i][j] = cycleValues[(currentIndex + 1) % cycleValues.length];
+                        cell.textContent = rules[i][j].toFixed(2);
                          if (rules[i][j] > 0) cell.style.color = '#6ee7b7';
                          else if (rules[i][j] < 0) cell.style.color = '#f87171';
                          else cell.style.color = '#9ca3af';
@@ -1438,7 +1507,7 @@ function stopAnimationLoop() {
             }
             table.appendChild(tbody); editorDiv.appendChild(table);
         }
-        function updateColorPicker() { 
+        function updateColorPicker() { /* ... same ... */
             const pickerDiv = document.getElementById('colorPicker');
             if (!pickerDiv) return;
             pickerDiv.innerHTML = ''; 
@@ -1446,15 +1515,30 @@ function stopAnimationLoop() {
                 const button = document.createElement('button');
                 button.classList.add('color-picker-button', 'rounded-full');
                 button.style.backgroundColor = color;
-                if (index === selectedColorForAdding) button.classList.add('selected'); 
+                if (index === selectedColorForAdding) button.classList.add('selected');
                 button.addEventListener('click', () => {
                     selectedColorForAdding = index; updateColorPicker(); 
                 });
                 pickerDiv.appendChild(button);
             });
         }
-        function setupEventListeners() { 
-            controlConfigurations = [
+        let noiseParamDebounceTimer = null;
+        function handleNoiseParamChange(paramName, valueSetter, value, isInt = false) { /* ... same ... */
+            valueSetter(isInt ? parseInt(value) : parseFloat(value));
+            
+            const valueDisplay = document.getElementById(paramName + 'Value');
+            if (valueDisplay) valueDisplay.textContent = value;
+
+            clearTimeout(noiseParamDebounceTimer);
+            noiseParamDebounceTimer = setTimeout(() => {
+                worldNoiseNeedsUpdate = true;
+                if (isPaused && animationFrameId === null && enableBiomes) {
+                    drawScene(); 
+                }
+            }, 250); 
+        }
+        function setupEventListeners() { /* ... same, ensure Black Hole related labels are updated ... */
+             controlConfigurations = [
                 { id: 'numParticles', isInt: true, resetOnChange: true, valueRef: (val) => numParticles = val },
                 { id: 'numColors', isInt: true, resetOnChange: true, valueRef: (val) => numColors = val },
                 { id: 'particleRadius', isInt: false, resetOnChange: false, valueRef: (val) => {
@@ -1502,106 +1586,110 @@ function stopAnimationLoop() {
                     enableBiomes = val; 
                     initializeBiomes(); 
                 } }, 
-                { id: 'noiseScaleSlider', isInt: false, resetOnChange: false, valueRef: (val) => { 
-                    noiseScale = val; worldNoiseNeedsUpdate = true;
-                    if (isPaused && animationFrameId === null && enableBiomes) drawScene(); 
-                }},
-                { id: 'noiseOctavesSlider', isInt: true, resetOnChange: false, valueRef: (val) => { 
-                    noiseOctaves = val; worldNoiseNeedsUpdate = true;
-                    if (isPaused && animationFrameId === null && enableBiomes) drawScene(); 
-                }},
-                { id: 'noisePersistenceSlider', isInt: false, resetOnChange: false, valueRef: (val) => { 
-                    noisePersistence = val; worldNoiseNeedsUpdate = true;
-                    if (isPaused && animationFrameId === null && enableBiomes) drawScene();
-                }},
+                { id: 'noiseScaleSlider', isNoiseParam: true, isInt: false, valueRef: (val) => noiseScale = val },
+                { id: 'noiseOctavesSlider', isNoiseParam: true, isInt: true, valueRef: (val) => noiseOctaves = val },
+                { id: 'noisePersistenceSlider', isNoiseParam: true, isInt: false, valueRef: (val) => noisePersistence = val },
+
 
                 { id: 'enableGravityWells', type: 'checkbox', resetOnChange: true, valueRef: (val) => { enableGravityWells = val; updateConditionalControls(); createGravityWells(); } }, 
                 { id: 'numGravityWells', isInt: true, resetOnChange: true, valueRef: (val) => { numGravityWells = val; createGravityWells(); } }, 
                 { id: 'gravityWellMass', isInt: false, resetOnChange: false, valueRef: (val) => { gravityWellMass = val; if(heavyObjects.length>0) heavyObjects.forEach(h => h.mass = val); } }, 
                 { id: 'gravityConstant', isInt: false, resetOnChange: false, valueRef: (val) => gravityConstant = val },
-                { id: 'gravityWellRadius', isInt: false, resetOnChange: false, valueRef: (val) => { gravityWellRadius = val; if(heavyObjects.length>0) heavyObjects.forEach(h => h.radius = val); } },
+                { id: 'gravityWellRadius', isInt: false, resetOnChange: false, valueRef: (val) => { gravityWellRadius = val; if(heavyObjects.length>0) heavyObjects.forEach(h => h.eventHorizonRadius = val); } }, // Changed to eventHorizonRadius
                 { id: 'zoomLevel', isInt: false, resetOnChange: false, valueRef: (val) => camera.zoom = val},
                 { id: 'trailOpacity', isInt: false, resetOnChange: false, valueRef: (val) => trailOpacity = val },
             ];
-            controlConfigurations.forEach(config => {
+            controlConfigurations.forEach(config => { /* ... same event binding logic ... */
                 const input = document.getElementById(config.id);
-                const valueDisplayId = config.id.endsWith('Slider') ? config.id.replace('Slider', 'Value') : config.id + 'Value';
-                const valueDisplay = document.getElementById(valueDisplayId);
+                const valueDisplay = document.getElementById(config.id.replace("Slider","") + 'Value'); 
 
                 if(!input) { console.warn("Control element not found:", config.id); return; }
-                
                 const eventType = (input.type === 'checkbox' || input.tagName === 'SELECT') ? 'change' : 'input';
-                input.addEventListener(eventType, () => { 
-                    let val;
-                    if (input.type === 'checkbox') val = input.checked;
-                    else if (input.tagName === 'SELECT') val = input.value;
-                    else if (config.isInt) val = parseInt(input.value);
-                    else val = parseFloat(input.value);
-                    
-                    if (valueDisplay && input.type === 'range') valueDisplay.textContent = input.value; 
-                    config.valueRef(val); 
-                    if (config.resetOnChange && !isPaused) resetSimulation(); 
-                });
+                
+                if (config.isNoiseParam) {
+                    input.addEventListener(eventType, function() {
+                        handleNoiseParamChange.call(this, config.id.replace("Slider",""), config.valueRef, this.value, config.isInt);
+                    });
+                } else {
+                    input.addEventListener(eventType, () => { 
+                        let val;
+                        if (input.type === 'checkbox') val = input.checked;
+                        else if (input.tagName === 'SELECT') val = input.value;
+                        else if (config.isInt) val = parseInt(input.value);
+                        else val = parseFloat(input.value);
+                        
+                        if (valueDisplay && input.type === 'range') valueDisplay.textContent = input.value;
+                        config.valueRef(val); 
+                        if (config.resetOnChange && !isPaused) resetSimulation(); 
+                    });
+                }
                 if (valueDisplay && input.type === 'range') valueDisplay.textContent = input.value;
             });
-            document.getElementById('showTrails')?.addEventListener('change', (e) => showTrails = e.target.checked);
+
+            const panelTabHandle = document.querySelector('.control-panel-tab-handle');
+            if (panelTabHandle) { /* ... same ... */
+                panelTabHandle.addEventListener('click', () => {
+                    const controlPanel = document.querySelector('.control-panel');
+                    if (controlPanel && controlPanel.classList.contains('minimized-for-fullscreen') && document.fullscreenElement) {
+                        controlPanel.classList.toggle('fully-expanded-in-fullscreen');
+                    }
+                });
+            }
+            document.getElementById('showTrails')?.addEventListener('change', (e) => {showTrails = e.target.checked; worldNoiseNeedsUpdate = true;}); 
             document.getElementById('particleGlow')?.addEventListener('change', (e) => particleGlow = e.target.checked);
-            document.getElementById('zoomLevel')?.addEventListener('input', (event) => {
+            document.getElementById('zoomLevel')?.addEventListener('input', (event) => { /* ... same, ensure worldNoiseNeedsUpdate = true ... */
                 camera.zoom = parseFloat(event.target.value);
                 const display = document.getElementById('zoomLevelValue');
                 if(display) display.textContent = `${camera.zoom.toFixed(2)}`;
+                worldNoiseNeedsUpdate = true; 
                 if (isPaused && animationFrameId === null) drawScene(); 
             });
-            document.getElementById('brushMode')?.addEventListener('change', (e) => {
+            document.getElementById('brushMode')?.addEventListener('change', (e) => { /* ... same ... */
                 brushModeActive = e.target.checked;
-                if (brushModeActive) { 
-                    isPanning = false; 
-                    canvas.style.cursor = 'crosshair';
-                } else { 
-                    canvas.style.cursor = addWellOnClickMode ? 'crosshair' : 'grab'; 
-                }
+                if (brushModeActive) {
+                    isPanning = false; canvas.style.cursor = 'crosshair';
+                } else { canvas.style.cursor = addWellOnClickMode ? 'crosshair' : 'grab'; }
             });
             document.getElementById('randomizeRulesBtn')?.addEventListener('click', () => { initializeRules(); showToast("Rules Randomized"); });
-            document.getElementById('pauseResumeBtn')?.addEventListener('click', () => {
+            document.getElementById('pauseResumeBtn')?.addEventListener('click', () => { /* ... same ... */
                 isPaused = !isPaused; stepMode = false; 
                 const button = document.getElementById('pauseResumeBtn');
                 if (button) button.textContent = isPaused ? 'Resume' : 'Pause';
-                if (isPaused) stopAnimationLoop(); else startAnimationLoop(); 
+                if (isPaused) stopAnimationLoop(); else startAnimationLoop();
             });
-            document.getElementById('stepBtn')?.addEventListener('click', () => {
+            document.getElementById('stepBtn')?.addEventListener('click', () => { /* ... same ... */
                 isPaused = true; stepMode = true; 
                 const pauseButton = document.getElementById('pauseResumeBtn');
                 if (pauseButton) pauseButton.textContent = 'Resume'; 
-                stopAnimationLoop(); 
-                animationFrameId = requestAnimationFrame(animationLoop); 
+                stopAnimationLoop(); animationFrameId = requestAnimationFrame(animationLoop); 
             });
             document.getElementById('fullscreenBtn')?.addEventListener('click', toggleFullScreen);
             document.getElementById('resetBtn')?.addEventListener('click', resetSimulation);
-            document.getElementById('clearParticlesBtn')?.addEventListener('click', () => {
-                particles = []; if (spatialGrid) spatialGrid.clear(); 
+            document.getElementById('clearParticlesBtn')?.addEventListener('click', () => { /* ... same ... */
+                particles = []; if (spatialGrid) spatialGrid.clear();
                 if(particleCountDisplay) particleCountDisplay.textContent = particles.length; 
                 showToast("All particles cleared");
             });
-            document.getElementById('addGravityWellOnClickBtn')?.addEventListener('click', () => {
-                if (!enableGravityWells) { showToast("Enable Gravity Wells first!"); return; }
+            document.getElementById('addGravityWellOnClickBtn')?.addEventListener('click', () => { /* ... same, ensure toast says "Black Hole" ... */
+                if (!enableGravityWells) { showToast("Enable Black Holes first!"); return; }
                 addWellOnClickMode = true; isPanning = false; brushModeActive = false; 
                 const brushCheckbox = document.getElementById('brushMode');
-                if(brushCheckbox) brushCheckbox.checked = false; 
-                canvas.style.cursor = 'crosshair'; 
-                showToast("Click on canvas to add a gravity well.");
+                if(brushCheckbox) brushCheckbox.checked = false;
+                canvas.style.cursor = 'crosshair';
+                showToast("Click on canvas to add a Black Hole.");
             });
-             document.getElementById('regenerateNoiseSeedBtn')?.addEventListener('click', () => {
-                noiseSeed = Math.random(); 
-                if (noiseGenerator) noiseGenerator.seed(noiseSeed); 
-                worldNoiseNeedsUpdate = true; // Important: Flag for offscreen canvas regeneration
+             document.getElementById('regenerateNoiseSeedBtn')?.addEventListener('click', () => { /* ... same, ensure worldNoiseNeedsUpdate = true ... */
+                noiseSeed = Math.random();
+                if (noiseGenerator) noiseGenerator.seed(noiseSeed);
+                worldNoiseNeedsUpdate = true;
                 showToast("Noise seed regenerated.");
                 if (isPaused && animationFrameId === null && enableBiomes) drawScene(); 
             });
-            canvas.addEventListener('mousedown', (event) => {
-                if (event.button === 0) { 
-                    if (brushModeActive) { 
+            canvas.addEventListener('mousedown', (event) => { /* ... same ... */
+                if (event.button === 0) {
+                    if (brushModeActive) {
                         isMouseDownForBrush = true; const { x, y } = getMousePos(event);
-                        addParticleAt(x, y, event.type); 
+                        addParticleAt(x, y, event.type);
                     } else if (addWellOnClickMode) { /* Handled by click */ }
                     else {
                         isPanning = true;
@@ -1611,41 +1699,42 @@ function stopAnimationLoop() {
                     }
                 }
             });
-            canvas.addEventListener('mousemove', (event) => {
+            canvas.addEventListener('mousemove', (event) => { /* ... same, ensure worldNoiseNeedsUpdate = true on pan ... */
                 if (isPanning) {
                     const dx = event.clientX - lastPanX; const dy = event.clientY - lastPanY;
                     lastPanX = event.clientX; lastPanY = event.clientY;
                     camera.x -= dx / camera.zoom; camera.y -= dy / camera.zoom;
+                    worldNoiseNeedsUpdate = true; 
                     if (isPaused && animationFrameId === null) drawScene();
                     event.preventDefault(); 
                 } else if (brushModeActive && isMouseDownForBrush) {
                     const { x, y } = getMousePos(event); addParticleAt(x, y, event.type); 
                 }
             });
-            window.addEventListener('mouseup', (event) => { 
+            window.addEventListener('mouseup', (event) => { /* ... same ... */
                 if (event.button === 0) {
                     if (isPanning) { isPanning = false; canvas.style.cursor = brushModeActive ? 'crosshair' : (addWellOnClickMode ? 'crosshair' : 'grab'); }
                     if (isMouseDownForBrush) isMouseDownForBrush = false;
                 }
             });
-            canvas.addEventListener('click', (event) => {
+            canvas.addEventListener('click', (event) => { /* ... same, ensure toast says "Black Hole" and new BlackHole() uses gravityWellRadius for eventHorizonRadius ... */
                 if (isPanning || (brushModeActive && event.type === "click" && isMouseDownForBrush)) return;
                 const { x, y } = getMousePos(event);
                 if (addWellOnClickMode && enableGravityWells) {
                     if (heavyObjects.length < parseInt(document.getElementById('numGravityWells').max)) {
-                        heavyObjects.push(new HeavyObject(x, y, gravityWellMass, gravityWellRadius));
-                        showToast(`Gravity well added at (${Math.round(x)}, ${Math.round(y)})`);
+                        heavyObjects.push(new BlackHole(x, y, gravityWellMass, gravityWellRadius)); // Use gravityWellRadius for eventHorizonRadius
+                        showToast(`Black Hole added at (${Math.round(x)}, ${Math.round(y)})`);
                         if (heavyObjects.length >= numGravityWells) { 
                              addWellOnClickMode = false; canvas.style.cursor = brushModeActive ? 'crosshair' : 'grab';
                         }
                     } else {
-                        showToast('Max number of gravity wells for current setting reached.');
+                        showToast('Max number of Black Holes for current setting reached.');
                         addWellOnClickMode = false; canvas.style.cursor = brushModeActive ? 'crosshair' : 'grab';
                     } return; 
                 }
                 if (!brushModeActive && !addWellOnClickMode) { addParticleAt(x, y, event.type); }
             });
-            canvas.addEventListener('wheel', (event) => {
+            canvas.addEventListener('wheel', (event) => { /* ... same, ensure worldNoiseNeedsUpdate = true on zoom ... */
                 event.preventDefault(); 
                 const rect = canvas.getBoundingClientRect();
                 const mouseX_canvas = event.clientX - rect.left; const mouseY_canvas = event.clientY - rect.top;  
@@ -1659,10 +1748,11 @@ function stopAnimationLoop() {
                 const zoomValueDisplay = document.getElementById('zoomLevelValue');
                 if (zoomSlider) zoomSlider.value = camera.zoom;
                 if (zoomValueDisplay) zoomValueDisplay.textContent = camera.zoom.toFixed(2);
+                worldNoiseNeedsUpdate = true; 
                 if (isPaused && animationFrameId === null) drawScene();
             }, { passive: false }); 
-            canvas.addEventListener('touchstart', (e) => {
-                if (brushModeActive) {
+            canvas.addEventListener('touchstart', (e) => { /* ... same ... */
+                 if (brushModeActive) {
                     isMouseDownForBrush = true; 
                     const touch = e.touches[0];
                     if (touch) { const { x, y } = getMousePos(touch); addParticleAt(x, y, e.type); }
@@ -1672,12 +1762,13 @@ function stopAnimationLoop() {
                     e.preventDefault();
                 }
             }, { passive: false });
-            canvas.addEventListener('touchmove', (e) => {
+            canvas.addEventListener('touchmove', (e) => { /* ... same, ensure worldNoiseNeedsUpdate = true on pan ... */
                 if (isPanning && e.touches.length === 1) {
                     const touch = e.touches[0];
                     const dx = touch.clientX - lastPanX; const dy = touch.clientY - lastPanY;
                     lastPanX = touch.clientX; lastPanY = touch.clientY;
                     camera.x -= dx / camera.zoom; camera.y -= dy / camera.zoom;
+                    worldNoiseNeedsUpdate = true; 
                     if (isPaused && animationFrameId === null) drawScene();
                     e.preventDefault();
                 } else if (brushModeActive && isMouseDownForBrush) { 
@@ -1686,34 +1777,40 @@ function stopAnimationLoop() {
                     e.preventDefault();
                 }
             }, { passive: false });
-            canvas.addEventListener('touchend', (e) => {
+            canvas.addEventListener('touchend', (e) => { /* ... same ... */
                 if (isPanning) isPanning = false;
                 if (isMouseDownForBrush) isMouseDownForBrush = false;
             });
-            window.addEventListener('keydown', (event) => {
-                if (event.key.toLowerCase() === 'h' && 
-                    !(event.target instanceof HTMLInputElement) && 
-                    !(event.target instanceof HTMLSelectElement) && 
-                    !(event.target instanceof HTMLTextAreaElement)) {
+            window.addEventListener('keydown', (event) => { /* ... same ... */
+                if (event.key.toLowerCase() === 'h' && !(event.target instanceof HTMLInputElement) && !(event.target instanceof HTMLSelectElement) && !(event.target instanceof HTMLTextAreaElement)) {
                     toggleSidebarVisibility();
                 }
             });
-            document.addEventListener('fullscreenchange', () => {
+            document.addEventListener('fullscreenchange', () => { /* ... same, ensure worldNoiseNeedsUpdate = true ... */
                 const fullscreenBtn = document.getElementById('fullscreenBtn');
                 const controlPanel = document.querySelector('.control-panel');
-                if (!document.fullscreenElement) { 
-                    if (fullscreenBtn) fullscreenBtn.textContent = 'Fullscreen';
-                    if (controlPanel && controlPanel.dataset.hiddenByFullscreen === 'true' && !controlPanel.dataset.hiddenByKey) {
-                        controlPanel.classList.remove('hidden');
-                    }
-                    if (controlPanel) controlPanel.removeAttribute('data-hidden-by-fullscreen');
-                } else { 
+
+                if (document.fullscreenElement) { 
                     if (fullscreenBtn) fullscreenBtn.textContent = 'Exit Fullscreen';
+                    if (controlPanel && !controlPanel.classList.contains('hidden-by-h-key')) {
+                        controlPanel.classList.add('minimized-for-fullscreen');
+                        controlPanel.dataset.minimizedByFullscreen = 'true'; 
+                    }
+                } else { 
+                    if (fullscreenBtn) fullscreenBtn.textContent = 'Fullscreen';
+                    if (controlPanel) {
+                        if (controlPanel.dataset.minimizedByFullscreen === 'true') {
+                            controlPanel.classList.remove('minimized-for-fullscreen');
+                            controlPanel.classList.remove('fully-expanded-in-fullscreen'); 
+                        }
+                        controlPanel.removeAttribute('data-minimized-by-fullscreen');
+                    }
                 }
-                setTimeout(resizeCanvas, 150);
+                worldNoiseNeedsUpdate = true; 
+                setTimeout(resizeCanvas, 150); 
             });
         }
-        function addParticleAt(x, y, eventType) { 
+        function addParticleAt(x, y, eventType) { /* ... same ... */
              if (x >= 0 && x <= WORLD_WIDTH && y >= 0 && y <= WORLD_HEIGHT) {
                 if (particles.filter(p => p.isAlive).length < MAX_TOTAL_PARTICLES) {
                     const newP = new Particle(x, y, selectedColorForAdding, 'normal');
@@ -1730,37 +1827,31 @@ function stopAnimationLoop() {
                 }
             }
         }
-        function showToast(message) { 
+        function showToast(message) { /* ... same ... */
             const toast = document.getElementById('toast-message');
             if (!toast) return;
             toast.textContent = message; toast.classList.add('show');
             setTimeout(() => { toast.classList.remove('show'); }, 3000);
         }
 
-        // --- Main Simulation Loop ---
         function animationLoop(timestamp) {
             const raw_dt = Math.min(0.1, (timestamp - lastFrameTime) / 1000 || 1/60); 
             lastFrameTime = timestamp;
             let allNewParticlesThisFrame = []; 
 
-            if (enableBiomes && noiseGenerator && settings.enableAbsorptionExplosion) {
+            if (enableBiomes && noiseGenerator && settings.enableAbsorptionExplosion) { /* ... same resource spawning ... */
                 const RESOURCE_SPAWN_CHANCE_PER_FRAME = 0.03; 
                 const MAX_ENERGY_IN_WORLD_FROM_NOISE = 75; 
                 const SPAWN_ATTEMPTS = 3; 
-                let totalSpawnWeight = 0;
-                for (const biomeKey in BIOME_SETTINGS) {
-                    totalSpawnWeight += (BIOME_SETTINGS[biomeKey].spawnWeight || 0);
-                }
-
 
                 if (Math.random() < RESOURCE_SPAWN_CHANCE_PER_FRAME) {
                     let currentEnergyParticlesCount = particles.filter(p => p.isAlive && p.type === 'energy').length;
                     if (currentEnergyParticlesCount < MAX_ENERGY_IN_WORLD_FROM_NOISE && particles.filter(p => p.isAlive).length < MAX_TOTAL_PARTICLES) {
                         for (let attempt = 0; attempt < SPAWN_ATTEMPTS; attempt++) {
-                            const spawnX = Math.random() * WORLD_WIDTH; 
+                            const spawnX = Math.random() * WORLD_WIDTH;
                             const spawnY = Math.random() * WORLD_HEIGHT;
                             const noiseVal = noiseGenerator.octaveNoise(spawnX / noiseScale, spawnY / noiseScale, noiseOctaves, noisePersistence);
-                            
+
                             let chosenBiomeForSpawn = BIOME_SETTINGS.DEFAULT_SPACE;
                             for (const biomeKey in BIOME_SETTINGS) {
                                 if (biomeKey === 'DEFAULT_SPACE') continue;
@@ -1772,17 +1863,11 @@ function stopAnimationLoop() {
                                     break;
                                 }
                             }
-
-                            // Simplified spawn: if biome has positive spawn weight, try to spawn.
-                            // A more complex weighted random choice could be used.
-                            if (chosenBiomeForSpawn.spawnWeight > 0) {
-                                // Normalize spawn chance somewhat, e.g. spawnWeight of 5 means 50% chance if this biome is hit
-                                if (Math.random() < (chosenBiomeForSpawn.spawnWeight / 10)) { 
-                                    if (particles.filter(p => p.isAlive).length + allNewParticlesThisFrame.length < MAX_TOTAL_PARTICLES) {
-                                        const energyP = new Particle(spawnX, spawnY, 0, 'energy');
-                                        allNewParticlesThisFrame.push(energyP);
-                                        break; 
-                                    }
+                            if (chosenBiomeForSpawn.spawnWeight > 0 && Math.random() < (chosenBiomeForSpawn.spawnWeight / 10)) { 
+                                if (particles.filter(p => p.isAlive).length + allNewParticlesThisFrame.length < MAX_TOTAL_PARTICLES) {
+                                    const energyP = new Particle(spawnX, spawnY, 0, 'energy');
+                                    allNewParticlesThisFrame.push(energyP);
+                                    break; 
                                 }
                             }
                         }
@@ -1790,14 +1875,10 @@ function stopAnimationLoop() {
                 }
             }
 
-            for (let i = particles.length - 1; i >= 0; i--) {
+            for (let i = particles.length - 1; i >= 0; i--) { /* ... same particle update logic ... */
                 const p = particles[i];
                 if (!p.isAlive) continue;
-                // Pass nearby particles from grid for AI, or all particles if grid not yet populated/used for this.
-                // For simplicity in this step, AI will use spatialGrid.getNearbyParticles directly if available.
-                const nearbyForAI = spatialGrid ? spatialGrid.getNearbyParticles(p) : particles;
-                const updateResult = p.update(raw_dt, nearbyForAI); 
-                
+                const updateResult = p.update(raw_dt, particles); 
                 if (updateResult.newParticlesFromSplit) {
                     allNewParticlesThisFrame.push(...updateResult.newParticlesFromSplit);
                 }
@@ -1809,7 +1890,7 @@ function stopAnimationLoop() {
                 }
             }
             const currentLiveParticleCount = particles.filter(p => p.isAlive).length;
-            if (allNewParticlesThisFrame.length > 0) {
+            if (allNewParticlesThisFrame.length > 0) { /* ... same new particle addition ... */
                 const availableSlots = MAX_TOTAL_PARTICLES - currentLiveParticleCount;
                 if (availableSlots > 0) {
                      particles.push(...allNewParticlesThisFrame.slice(0, Math.min(allNewParticlesThisFrame.length, availableSlots)));
@@ -1817,8 +1898,44 @@ function stopAnimationLoop() {
             }
             particles = particles.filter(p => p.isAlive);
 
+            // Black Hole Interactions
+            if (enableGravityWells && heavyObjects.length > 0) {
+                particles.forEach(p => {
+                    if (!p.isAlive) return;
+                    heavyObjects.forEach(bh => {
+                        const dx = bh.x - p.x;
+                        const dy = bh.y - p.y;
+                        const distSq = dx * dx + dy * dy;
+                        
+                        // Gravitational Pull
+                        if (distSq > 0) { // Avoid division by zero if particle is at BH center
+                            const dist = Math.sqrt(distSq);
+                            const force = (gravityConstant * bh.mass * p.mass) / distSq;
+                            let ax = (force * dx / dist) / p.mass;
+                            let ay = (force * dy / dist) / p.mass;
 
-            if (spatialGrid) {
+                            // Cap acceleration from black hole to prevent extreme velocities
+                            const totalBHAccelerationMag = Math.sqrt(ax*ax + ay*ay);
+                            const maxBHForce = maxForce * 2; // Allow stronger pull than inter-particle forces
+                            if (totalBHAccelerationMag > maxBHForce) {
+                                const scale = maxBHForce / totalBHAccelerationMag;
+                                ax *= scale; ay *= scale;
+                            }
+                            p.vx += ax * raw_dt * simulationSpeed;
+                            p.vy += ay * raw_dt * simulationSpeed;
+                        }
+
+                        // Absorption at Event Horizon
+                        if (p.type !== 'energy' && distSq < bh.eventHorizonRadius * bh.eventHorizonRadius) {
+                            p.isAlive = false;
+                            bh.absorb(); // Black hole absorbs it
+                        }
+                    });
+                });
+            }
+
+
+            if (spatialGrid) { /* ... same inter-particle interactions ... */
                 spatialGrid.clear();
                 particles.forEach(p => { if(p.isAlive) spatialGrid.addParticle(p); });
                 
@@ -1844,9 +1961,11 @@ function stopAnimationLoop() {
                                 p1.mass = Math.min(p1.mass, settings.maxParticleMass);
                                 p1.radius = p1.baseRadius * Math.sqrt(p1.mass);
                                 p1.radius = Math.max(1, p1.radius);
+                                
                                 p1.state = 'was_hunting'; 
                                 p1.targetParticle = null;
                                 p1.stateTicks = 0;
+
                                 if (enableSplitting && Math.random() < settings.predatorSplitChanceOnHunt) {
                                    particlesToSplitFromHunt.push(p1); 
                                 }
@@ -1871,7 +1990,7 @@ function stopAnimationLoop() {
                         }
                     });
                 });
-                if (particlesToSplitFromHunt.length > 0) {
+                if (particlesToSplitFromHunt.length > 0) { /* ... same predator split logic ... */
                     let newOffspringFromHunts = [];
                     particlesToSplitFromHunt.forEach(predator => {
                         if (predator.isAlive) { 
@@ -1888,7 +2007,8 @@ function stopAnimationLoop() {
                     }
                 }
             }
-            particles = particles.filter(p => p.isAlive);
+            particles = particles.filter(p => p.isAlive); // Filter dead particles *after* all interactions
+
             drawScene(); 
             frameCount++; const now = performance.now();
             const deltaFps = now - lastFpsUpdateTime;
@@ -1907,79 +2027,60 @@ function stopAnimationLoop() {
             if (!isPaused) animationFrameId = requestAnimationFrame(animationLoop);
             else animationFrameId = null; 
         }
-
-
-        function drawScene() {
+        
+        function drawScene() { /* ... same, but heavyObjects are drawn using BlackHole.draw(ctx, performance.now()) ... */
             const W = canvas.width;
             const H = canvas.height;
+            const time = performance.now();
 
-            // 1. Background Fading / Clearing
-            if (showTrails) {
-                ctx.fillStyle = `rgba(17, 24, 39, ${trailOpacity})`; // Base fade color
-                ctx.fillRect(0, 0, W, H);
-            } else {
-                ctx.fillStyle = '#111827'; // Solid default background
-                ctx.fillRect(0, 0, W, H);
-            }
 
-            // 2. Draw Biome Background from Offscreen Canvas
             if (enableBiomes && noiseGenerator) {
-                initializeOffscreenNoiseCanvas(); // Ensure it's created and sized
+                initializeOffscreenNoiseCanvas(); 
                 if (worldNoiseNeedsUpdate) { 
-                    updateWorldNoiseTexture(); // Regenerate if noise params changed
+                    updateWorldNoiseTexture(); // This function now uses 'time' for dynamic biome colors
+                }
+
+                // Base background for trails
+                if (showTrails) {
+                    ctx.fillStyle = `rgba(17, 24, 39, ${trailOpacity})`; 
+                    ctx.fillRect(0, 0, W, H);
+                } else {
+                    ctx.fillStyle = '#111827'; 
+                    ctx.fillRect(0, 0, W, H);
                 }
                 
-                if (offscreenNoiseCanvas) {
-                    // Calculate source rectangle (world coordinates) from camera view
-                    const sWidth = W / camera.zoom;
-                    const sHeight = H / camera.zoom;
-                    const sx = camera.x - sWidth / 2;
-                    const sy = camera.y - sHeight / 2;
+                const sWidth = W / camera.zoom;
+                const sHeight = H / camera.zoom;
+                const sx = camera.x - sWidth / 2;
+                const sy = camera.y - sHeight / 2;
 
-                    // Draw the relevant part of the offscreen canvas to the main canvas
-                    ctx.drawImage(offscreenNoiseCanvas,
-                        sx, sy, sWidth, sHeight, // Source rectangle from offscreen canvas
-                        0, 0, W, H              // Destination rectangle on main canvas
-                    );
+                ctx.drawImage(offscreenNoiseCanvas,
+                    sx, sy, sWidth, sHeight, 
+                    0, 0, W, H 
+                );
+            } else { 
+                if (showTrails) {
+                    ctx.fillStyle = `rgba(17, 24, 39, ${trailOpacity})`;
+                    ctx.fillRect(0, 0, W, H);
+                } else {
+                    ctx.fillStyle = '#111827';
+                    ctx.fillRect(0, 0, W, H);
                 }
             }
-            
-            // --- Pulsating effect for Radiation Zones (applied as an overlay) ---
-            if (enableBiomes && particleGlow) { // Only if biomes and glow are on
-                const time = performance.now();
-                particles.forEach(p => {
-                    if (p.isAlive && p.type === 'normal' && p.inRadiationZone) {
-                        // Example: draw a pulsating aura around particles in radiation
-                        const pulseAlpha = (Math.sin(time * 0.005 + p.x * 0.05 + p.y * 0.03) * 0.5 + 0.5) * 0.3; // 0 to 0.3 alpha
-                        ctx.beginPath();
-                        ctx.arc(
-                            (p.x - camera.x) * camera.zoom + W / 2,
-                            (p.y - camera.y) * camera.zoom + H / 2,
-                            (p.radius + 5) * camera.zoom, // Aura slightly larger than particle
-                            0, Math.PI * 2
-                        );
-                        // Color of radiation biome for aura
-                        const radColor = BIOME_SETTINGS.RADIATION_ZONE.colorFn(0.8, p.x, p.y); // Get base color
-                        ctx.fillStyle = `rgba(${radColor.r}, ${radColor.g}, ${radColor.b}, ${pulseAlpha})`;
-                        ctx.fill();
-                    }
-                });
-            }
 
-
-            // 3. Draw Particles and Other World Objects (transformed)
             ctx.save(); 
             ctx.translate(W / 2, H / 2); 
             ctx.scale(camera.zoom, camera.zoom); 
             ctx.translate(-camera.x, -camera.y); 
             
             particles.forEach(p => { if (p.isAlive) p.draw(); });
-            heavyObjects.forEach(well => well.draw());
-
+            heavyObjects.forEach(bh => bh.draw(ctx, time)); // Pass context and time to BH draw
             ctx.restore(); 
-            ctx.shadowBlur = 0; ctx.shadowColor = 'transparent';
+            // Ensure shadows are globally reset after all drawing if any were used
+            ctx.shadowColor = 'transparent';
+            ctx.shadowBlur = 0;
         }
-        function resizeCanvas() { 
+        function resizeCanvas() { /* ... same ... */
             const parent = canvas.parentElement;
             if (!parent) return; 
             canvas.width = parent.clientWidth;
@@ -1987,19 +2088,19 @@ function stopAnimationLoop() {
             const infoDispHeight = infoDisp ? infoDisp.offsetHeight : 0;
             canvas.height = Math.max(150, parent.clientHeight - infoDispHeight - 10); 
             
-            worldNoiseNeedsUpdate = true; // Force redraw of noise background on resize as aspect ratio might change how it's drawn
+            worldNoiseNeedsUpdate = true; 
 
             drawScene(); 
             if (!isPaused && animationFrameId === null) { startAnimationLoop(); } 
             else if (isPaused && animationFrameId === null) { /* Redraw handled by drawScene() */ }
         }
-        window.addEventListener('load', () => { 
+        window.addEventListener('load', () => { /* ... same, check if absorbedByBHCountDisplay exists ... */
+            if (absorbedByBHCountDisplay) absorbedByBHCountDisplay.textContent = totalAbsorbedByBH;
             resizeCanvas(); 
             setupEventListeners(); 
             controlConfigurations.forEach(config => {
                 const inputEl = document.getElementById(config.id);
-                const valueDisplayId = config.id.endsWith('Slider') ? config.id.replace('Slider', 'Value') : config.id + 'Value';
-                const valueDisplay = document.getElementById(valueDisplayId);
+                const valueDisplay = document.getElementById(config.id.replace("Slider","") + 'Value');
 
                 if (inputEl) {
                     let val;
@@ -2015,7 +2116,7 @@ function stopAnimationLoop() {
             });
             updateConditionalControls(); 
             resetSimulation(); 
-            showToast("Particle Life V2 Ready!");
+            showToast("Particle Life: Black Holes & Visuals Updated!");
         });
         window.addEventListener('resize', resizeCanvas); 
     </script>
